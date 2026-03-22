@@ -1,0 +1,36 @@
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration
+      - org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration
+      - org.springframework.boot.autoconfigure.data.redis.RedisAutoConfiguration
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
+      - org.springframework.boot.autoconfigure.flyway.FlywayAutoConfiguration
+
+  jpa:
+    hibernate:
+      ddl-auto: none
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: test-group
+      auto-offset-reset: earliest
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+fraud:
+  rules:
+    amount:
+      decline-threshold: 500000
+      review-threshold: 100000
+    velocity:
+      max-transactions: 5
+      window-seconds: 60
+  kafka:
+    topic-in: transactions-raw
+    topic-out: transactions-verdicted
+    topic-dlq: transactions-dlq
