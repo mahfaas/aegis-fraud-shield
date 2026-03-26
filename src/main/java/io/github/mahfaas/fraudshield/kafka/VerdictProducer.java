@@ -10,6 +10,13 @@ import org.springframework.stereotype.Component;
 
 import java.util.Map;
 
+/**
+ * Publishes fraud-check results to Kafka.
+ * <p>
+ * Verdicted transactions go to the output topic.
+ * Failed / invalid messages go to the Dead Letter Queue.
+ * </p>
+ */
 @Slf4j
 @Component
 public class VerdictProducer {
@@ -33,12 +40,19 @@ public class VerdictProducer {
         this.topicDlq = topicDlq;
     }
 
+    /**
+     * Publish a verdicted transaction to the output topic.
+     */
     public void send(VerdictedTransaction verdictedTransaction) {
         String key = verdictedTransaction.getTransaction().getTransactionId();
         verdictTemplate.send(topicOut, key, verdictedTransaction);
         log.info("Published verdict for txId={}: {}", key, verdictedTransaction.getVerdict());
     }
 
+    /**
+     * Route an invalid or failed message to the Dead Letter Queue.
+     * Uses Jackson ObjectMapper for safe JSON serialization.
+     */
     public void sendToDlq(String failedPayload, String reason) {
         try {
             String message = objectMapper.writeValueAsString(

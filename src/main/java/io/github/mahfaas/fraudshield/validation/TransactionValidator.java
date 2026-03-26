@@ -7,6 +7,7 @@ import org.springframework.stereotype.Component;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Validates the structural correctness of a transaction before it enters the Rule Engine.
@@ -17,6 +18,8 @@ import java.util.List;
 @Slf4j
 @Component
 public class TransactionValidator {
+
+    private static final Pattern CURRENCY_PATTERN = Pattern.compile("^[A-Z]{3}$");
 
     /**
      * Validate a transaction and return a list of error messages.
@@ -50,6 +53,8 @@ public class TransactionValidator {
 
         if (isBlank(transaction.getCurrency())) {
             errors.add("currency is required");
+        } else if (!CURRENCY_PATTERN.matcher(transaction.getCurrency()).matches()) {
+            errors.add("currency must be a valid ISO 4217 code (3 uppercase letters)");
         }
 
         if (isBlank(transaction.getCountry())) {

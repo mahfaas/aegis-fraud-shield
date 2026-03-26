@@ -30,11 +30,7 @@ public class TransactionConsumer {
     private final VerdictProducer verdictProducer;
     private final FraudMetrics metrics;
 
-    @KafkaListener(
-            topics = "${fraud.kafka.topic-in}",
-            groupId = "${spring.kafka.consumer.group-id}",
-            containerFactory = "kafkaListenerContainerFactory"
-    )
+    @KafkaListener(topics = "${fraud.kafka.topic-in}", groupId = "${spring.kafka.consumer.group-id}", containerFactory = "kafkaListenerContainerFactory")
     public void consume(Transaction transaction) {
         log.info("Received transaction: txId={}", transaction.getTransactionId());
         metrics.recordReceived();
@@ -45,8 +41,7 @@ public class TransactionConsumer {
             log.warn("Validation failed for txId={}: {}", transaction.getTransactionId(), validationErrors);
             verdictProducer.sendToDlq(
                     transaction.getTransactionId(),
-                    "Validation failed: " + String.join("; ", validationErrors)
-            );
+                    "Validation failed: " + String.join("; ", validationErrors));
             metrics.recordDlq();
             return;
         }
@@ -61,4 +56,3 @@ public class TransactionConsumer {
         log.info("Processed txId={} → verdict={}", transaction.getTransactionId(), result.getVerdict());
     }
 }
-

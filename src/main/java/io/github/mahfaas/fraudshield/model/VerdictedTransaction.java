@@ -17,9 +17,18 @@ import java.util.List;
 @AllArgsConstructor
 public class VerdictedTransaction {
 
+    /** Original transaction data. */
     private Transaction transaction;
+
+    /** Final verdict. */
     private Verdict verdict;
+
+    /** Human-readable reasons collected from each rule that triggered. */
     private List<String> reasons;
+
+    /** Aggregated risk score from all evaluated rules. */
     private int totalRiskScore;
+
+    /** Timestamp when the verdict was produced. */
     private Instant processedAt;
 }

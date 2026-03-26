@@ -26,6 +26,8 @@ Aegis Fraud-Shield is a high-performance system designed to evaluate financial t
 - 📊 Rich Observability: Built-in Micrometer, Prometheus, and Grafana stack for monitoring TPS, latency, and rule triggers.
 - 🌐 Dynamic Configuration: Adjust fraud thresholds on-the-fly via REST API with zero downtime.
 - 🛠 Automated Generation: Integrated synthetic transaction producer for immediate load testing.
+- 🎯 Risk Scoring: Numeric risk score aggregation across all rules — provides granular risk assessment beyond binary verdicts.
+- ✅ Strict Validation: ISO 4217 currency format enforcement and comprehensive input validation before rule evaluation.
 
 ---
 
@@ -65,12 +67,14 @@ graph TB
 
 ## 🚦 Fraud Detection Rules
 
-| Rule | Description | Backing Store | Time Complexity |
-|---|---|---|---|
-| Blacklist | O(1) checks against known malicious IPs and Card BINs | PostgreSQL + Memory | O(1) |
-| Amount Anomaly| Flags transactions exceeding highly configurable risk limits | Memory / DB Sync | O(1) |
-| Velocity | Detects high-frequency spending patterns per account using TTL counters | Redis | O(1) |
-| Geo-Velocity | Prevents "impossible travel" by evaluating IP geos within timeframes | Redis | O(1) |
+| Rule | Description | Risk Score | Backing Store | Complexity |
+|---|---|---|---|---|
+| Blacklist | O(1) checks against known malicious IPs and Card BINs | 100 (DECLINED) | PostgreSQL + Memory | O(1) |
+| Amount Anomaly | Flags transactions exceeding configurable risk limits | 50 / 100 | Memory / DB Sync | O(1) |
+| Velocity | Detects high-frequency spending patterns per account | 100 (DECLINED) | Redis | O(1) |
+| Geo-Velocity | Prevents "impossible travel" by evaluating country changes | 50 (MANUAL_REVIEW) | Redis | O(1) |
+
+Each rule contributes a numeric `riskScore` to the total. The `totalRiskScore` in the verdict response represents the aggregate risk level across all evaluated rules.
 
 ---
 
