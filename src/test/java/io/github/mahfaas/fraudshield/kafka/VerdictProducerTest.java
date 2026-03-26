@@ -1,5 +1,6 @@
 package io.github.mahfaas.fraudshield.kafka;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.mahfaas.fraudshield.model.Transaction;
 import io.github.mahfaas.fraudshield.model.Verdict;
 import io.github.mahfaas.fraudshield.model.VerdictedTransaction;
@@ -25,11 +26,13 @@ class VerdictProducerTest {
     @Mock
     private KafkaTemplate<String, String> dlqTemplate;
 
+    private final ObjectMapper objectMapper = new ObjectMapper();
+
     @Test
     @DisplayName("Should send verdicted transaction to output topic")
     void shouldSendVerdict() {
         VerdictProducer producer = new VerdictProducer(
-                verdictTemplate, dlqTemplate,
+                verdictTemplate, dlqTemplate, objectMapper,
                 "transactions-verdicted", "transactions-dlq"
         );
 
@@ -59,7 +62,7 @@ class VerdictProducerTest {
     @DisplayName("Should send failed message to DLQ")
     void shouldSendToDlq() {
         VerdictProducer producer = new VerdictProducer(
-                verdictTemplate, dlqTemplate,
+                verdictTemplate, dlqTemplate, objectMapper,
                 "transactions-verdicted", "transactions-dlq"
         );
 
@@ -71,3 +74,4 @@ class VerdictProducerTest {
         );
     }
 }
+
