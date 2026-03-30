@@ -1,5 +1,6 @@
 package io.github.mahfaas.fraudshield.engine;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import io.github.mahfaas.fraudshield.model.Verdict;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -28,6 +29,7 @@ public class RuleResult {
     /**
      * @return true if the rule triggered (verdict is not APPROVED).
      */
+    @JsonIgnore
     public boolean isTriggered() {
         return verdict != Verdict.APPROVED;
     }

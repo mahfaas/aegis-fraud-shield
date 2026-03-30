@@ -60,7 +60,14 @@ public class VerdictProducer {
             dlqTemplate.send(topicDlq, message);
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize DLQ message for payload={}", failedPayload, e);
-            dlqTemplate.send(topicDlq, "{\"payload\":\"" + failedPayload + "\",\"error\":\"serialization_failed\"}");
+            try {
+                var fallbackNode = objectMapper.createObjectNode();
+                fallbackNode.put("payload", failedPayload);
+                fallbackNode.put("error", "serialization_failed");
+                dlqTemplate.send(topicDlq, fallbackNode.toString());
+            } catch (Exception ex) {
+                dlqTemplate.send(topicDlq, "{\"error\":\"serialization_failed_completely\"}");
+            }
         }
         log.warn("Sent message to DLQ: {}", reason);
     }
