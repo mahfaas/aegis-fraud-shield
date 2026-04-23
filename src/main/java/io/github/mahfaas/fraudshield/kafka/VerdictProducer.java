@@ -38,15 +38,22 @@ public class VerdictProducer {
         this.objectMapper = objectMapper;
         this.topicOut = topicOut;
         this.topicDlq = topicDlq;
+        log.info("VerdictProducer initialized with outTopic='{}', dlqTopic='{}'", topicOut, topicDlq);
     }
+
 
     /**
      * Publish a verdicted transaction to the output topic.
      */
     public void send(VerdictedTransaction verdictedTransaction) {
+        if (verdictedTransaction == null || verdictedTransaction.getVerdict() == null) {
+            log.warn("Attempted to send null verdict or transaction, routing to DLQ");
+            sendToDlq("null", "VerdictedTransaction or verdict is null");
+            return;
+        }
         String key = verdictedTransaction.getTransaction().getTransactionId();
         verdictTemplate.send(topicOut, key, verdictedTransaction);
-        log.info("Published verdict for txId={}: {}", key, verdictedTransaction.getVerdict());
+        log.info("Published verdict for txId={} on topic '{}' : {}", key, topicOut, verdictedTransaction.getVerdict());
     }
 
     /**
