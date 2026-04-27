@@ -17,7 +17,8 @@ import java.util.List;
  * <p>
  * All registered {@link Rule} beans are executed in order.
  * The chain short-circuits on the first DECLINED result.
- * If any rule returns MANUAL_REVIEW (but none DECLINED), the final verdict is MANUAL_REVIEW.
+ * If any rule returns MANUAL_REVIEW (but none DECLINED), the final verdict is
+ * MANUAL_REVIEW.
  * Otherwise the transaction is APPROVED.
  * </p>
  */
@@ -29,7 +30,8 @@ public class RuleEngine {
     private final FraudMetrics metrics;
 
     /**
-     * Spring auto-injects all beans implementing {@link Rule}, sorted by {@link Rule#getOrder()}.
+     * Spring auto-injects all beans implementing {@link Rule}, sorted by
+     * {@link Rule#getOrder()}.
      */
     public RuleEngine(List<Rule> rules, FraudMetrics metrics) {
         this.rules = rules.stream()
@@ -56,7 +58,7 @@ public class RuleEngine {
             totalRiskScore += result.getRiskScore();
 
             if (result.isTriggered()) {
-                metrics.recordRuleTriggered();
+                metrics.recordRuleTriggered(rule.getName());
                 reasons.add("[" + rule.getName() + "] " + result.getReason());
             }
 

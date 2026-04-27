@@ -45,6 +45,8 @@ fraud:
     velocity:
       max-transactions: 5
       window-seconds: 60
+    merchant-category:
+      enabled: false   # set to true to activate MerchantCategoryRule
 
   kafka:
     topic-in: transactions-raw

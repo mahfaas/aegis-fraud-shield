@@ -6,6 +6,8 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.springframework.stereotype.Component;
 
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
  * Centralized Micrometer metrics for the fraud-detection pipeline.
  * <p>
@@ -23,8 +25,14 @@ public class FraudMetrics {
     private final Counter transactionsDlq;
     private final Counter ruleTriggered;
     private final Timer processingTime;
+    private final MeterRegistry registry;
+
+    /** Cache of per-rule counters to avoid repeated registry lookups. */
+    private final ConcurrentHashMap<String, Counter> ruleCounters = new ConcurrentHashMap<>();
 
     public FraudMetrics(MeterRegistry registry) {
+        this.registry = registry;
+
         this.transactionsReceived = Counter.builder("fraud.transactions.received")
                 .description("Total transactions received from Kafka")
                 .register(registry);
@@ -49,7 +57,8 @@ public class FraudMetrics {
                 .register(registry);
 
         this.ruleTriggered = Counter.builder("fraud.rules.triggered")
-                .description("Total rule triggers (decline or manual review)")
+                .tag("rule", "ALL")
+                .description("Aggregate rule triggers (decline or manual review)")
                 .register(registry);
 
         this.processingTime = Timer.builder("fraud.processing.time")
@@ -73,8 +82,27 @@ public class FraudMetrics {
         transactionsDlq.increment();
     }
 
+    /** Increments the aggregate rule-triggered counter. */
     public void recordRuleTriggered() {
         ruleTriggered.increment();
+    }
+
+    /**
+     * Increments both the aggregate counter and a per-rule counter tagged by {@code ruleName}.
+     * Per-rule counters appear in Prometheus as
+     * {@code fraud_rules_triggered_total{rule="RULE_NAME"}}.
+     *
+     * @param ruleName the name returned by {@link io.github.mahfaas.fraudshield.engine.Rule#getName()}
+     */
+    public void recordRuleTriggered(String ruleName) {
+        ruleTriggered.increment();
+        ruleCounters
+                .computeIfAbsent(ruleName, name ->
+                        Counter.builder("fraud.rules.triggered")
+                                .tag("rule", name)
+                                .description("Rule triggers for rule: " + name)
+                                .register(registry))
+                .increment();
     }
 
     public Timer.Sample startTimer() {

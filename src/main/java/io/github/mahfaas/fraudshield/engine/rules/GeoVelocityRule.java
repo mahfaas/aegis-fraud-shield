@@ -25,7 +25,7 @@ public class GeoVelocityRule implements Rule {
 
     private static final String RULE_NAME = "GEO_VELOCITY";
     private static final String KEY_PREFIX = "geo:";
-    private static final long WINDOW_SECONDS = 3600; // 1 hour
+    public static final long WINDOW_SECONDS = 3600; // 1 hour
 
     private final StringRedisTemplate redisTemplate;
 

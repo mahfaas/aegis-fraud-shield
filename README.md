@@ -45,11 +45,12 @@ graph TB
         V -->|Valid| RE{"Rule Engine"}
         
         RE --> R1["Blacklist Rule"]
-        R1 -.-> R2["Amount Anomaly Rule"]
-        R2 -.-> R3["Velocity Rule"]
-        R3 -.-> R4["Geo Velocity Rule"]
+        R1 -.-> R2["Merchant Category Rule *(opt)*"]
+        R2 -.-> R3["Amount Anomaly Rule"]
+        R3 -.-> R4["Velocity Rule"]
+        R4 -.-> R5["Geo Velocity Rule"]
         
-        R4 --> RP["Verdict Producer"]
+        R5 --> RP["Verdict Producer"]
     end
 
     subgraph "Data Storage"
@@ -67,14 +68,27 @@ graph TB
 
 ## 🚦 Fraud Detection Rules
 
-| Rule | Description | Risk Score | Backing Store | Complexity |
+| Rule | Description | Risk Score | Backing Store | Enabled by default |
 |---|---|---|---|---|
-| Blacklist | O(1) checks against known malicious IPs and Card BINs | 100 (DECLINED) | PostgreSQL + Memory | O(1) |
-| Amount Anomaly | Flags transactions exceeding configurable risk limits | 50 / 100 | Memory / DB Sync | O(1) |
-| Velocity | Detects high-frequency spending patterns per account | 100 (DECLINED) | Redis | O(1) |
-| Geo-Velocity | Prevents "impossible travel" by evaluating country changes | 50 (MANUAL_REVIEW) | Redis | O(1) |
+| Blacklist | O(1) checks against known malicious IPs and Card BINs | 100 (DECLINED) | PostgreSQL + Memory | ✅ |
+| Amount Anomaly | Flags transactions exceeding configurable risk limits | 50 / 100 | Memory | ✅ |
+| Velocity | Detects high-frequency spending patterns per account | 100 (DECLINED) | Redis | ✅ |
+| Geo-Velocity | Prevents "impossible travel" by evaluating country changes | 50 (MANUAL_REVIEW) | Redis | ✅ |
+| Merchant Category | Blocks or flags transactions by merchant category (gambling, crypto…) | 50 / 100 | Memory | ⚙️ opt-in |
 
 Each rule contributes a numeric `riskScore` to the total. The `totalRiskScore` in the verdict response represents the aggregate risk level across all evaluated rules.
+
+> **Enabling Merchant Category Rule**  
+> The rule is opt-in and costs zero resources when disabled. To activate, set the following property:  
+> ```yaml
+> fraud:
+>   rules:
+>     merchant-category:
+>       enabled: true
+> ```
+> Default blocked categories: `darkweb`, `illegal` → **DECLINED**  
+> Default review categories: `gambling`, `crypto`, `adult`, `firearms`, `wire_transfer` → **MANUAL_REVIEW**  
+> Both lists can be updated at runtime via `PUT /api/v1/rules/config/merchant-category/{decline|review}`.
 
 ---
 
