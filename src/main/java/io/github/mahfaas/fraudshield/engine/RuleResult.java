@@ -15,7 +15,7 @@ import lombok.Data;
 public class RuleResult {
 
     /** Which verdict this rule suggests. */
-    private final Verdict verdict;
+    private final Verdict verdict; 
 
     /** Name of the rule that produced this result. */
     private final String ruleName;

@@ -22,7 +22,7 @@ public interface Rule {
     /**
      * @return a short name identifying this rule (used in logging and metrics).
      */
-    String getName();
+    String getName(); 
 
     /**
      * @return execution order — lower values run first.

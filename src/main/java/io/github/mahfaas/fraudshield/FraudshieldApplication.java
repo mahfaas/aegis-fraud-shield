@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 public class FraudshieldApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(FraudshieldApplication.class, args);
+		SpringApplication.run(FraudshieldApplication.class, args); 
 	}
 
 }
