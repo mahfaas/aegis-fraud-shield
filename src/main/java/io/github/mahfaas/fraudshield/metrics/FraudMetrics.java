@@ -1,9 +1,12 @@
 package io.github.mahfaas.fraudshield.metrics;
 
+import io.github.mahfaas.fraudshield.engine.RuleEngine;
 import io.github.mahfaas.fraudshield.model.Verdict;
 import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Gauge;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.util.concurrent.ConcurrentHashMap;
@@ -14,6 +17,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * Tracks transaction throughput, rule evaluations, verdicts, and processing latency.
  * All metrics are exposed via the /actuator/prometheus endpoint.
  * </p>
+ *
+ * <p><strong>Metrics registered:</strong></p>
+ * <ul>
+ *   <li>{@code fraud.transactions.received} — total received from Kafka</li>
+ *   <li>{@code fraud.transactions.verdicted{verdict}} — broken down by verdict tag</li>
+ *   <li>{@code fraud.transactions.dlq} — routed to dead letter queue</li>
+ *   <li>{@code fraud.rules.triggered{rule}} — per-rule and aggregate trigger counts</li>
+ *   <li>{@code fraud.processing.time} — processing latency histogram (P50/P95/P99)</li>
+ *   <li>{@code fraud.engine.active_rules} — gauge: number of loaded rules</li>
+ * </ul>
  */
 @Component
 public class FraudMetrics {
@@ -30,7 +43,11 @@ public class FraudMetrics {
     /** Cache of per-rule counters to avoid repeated registry lookups. */
     private final ConcurrentHashMap<String, Counter> ruleCounters = new ConcurrentHashMap<>();
 
-    public FraudMetrics(MeterRegistry registry) {
+    /**
+     * @param ruleEngine injected lazily to break the circular dependency:
+     *                   RuleEngine → FraudMetrics → RuleEngine.
+     */
+    public FraudMetrics(MeterRegistry registry, @Lazy RuleEngine ruleEngine) {
         this.registry = registry;
 
         this.transactionsReceived = Counter.builder("fraud.transactions.received")
@@ -63,6 +80,11 @@ public class FraudMetrics {
 
         this.processingTime = Timer.builder("fraud.processing.time")
                 .description("Time to process a single transaction through the rule engine")
+                .register(registry);
+
+        // Gauge: reports the live count of registered rules via RuleEngine::getRuleCount
+        Gauge.builder("fraud.engine.active_rules", ruleEngine, RuleEngine::getRuleCount)
+                .description("Number of fraud-detection rules currently loaded in the engine")
                 .register(registry);
     }
 
@@ -112,4 +134,12 @@ public class FraudMetrics {
     public void stopTimer(Timer.Sample sample) {
         sample.stop(processingTime);
     }
+
+    // ── Snapshot getters for MetricsController /summary endpoint ─────────────
+
+    public long getReceivedCount()     { return (long) transactionsReceived.count(); }
+    public long getApprovedCount()     { return (long) transactionsApproved.count(); }
+    public long getDeclinedCount()     { return (long) transactionsDeclined.count(); }
+    public long getManualReviewCount() { return (long) transactionsManualReview.count(); }
+    public long getDlqCount()          { return (long) transactionsDlq.count(); }
 }

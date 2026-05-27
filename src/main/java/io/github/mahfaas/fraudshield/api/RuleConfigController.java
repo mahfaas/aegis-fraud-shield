@@ -95,14 +95,14 @@ public class RuleConfigController {
     @Operation(summary = "Add or remove categories from the MerchantCategoryRule decline list")
     public ResponseEntity<?> updateMerchantDeclineCategories(
             @RequestBody MerchantCategoryConfigRequest request) {
-        return merchantCategoryRule.map(rule -> {
+        return merchantCategoryRule.<ResponseEntity<?>>map(rule -> {
             request.add().forEach(rule::addDeclineCategory);
             request.remove().forEach(rule::removeDeclineCategory);
-            return ResponseEntity.ok(Map.of(
-                    "declineCategories", rule.getDeclineCategories(),
-                    "reviewCategories", rule.getReviewCategories()
-            ));
-        }).orElse(ResponseEntity.status(404).body(
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("declineCategories", rule.getDeclineCategories());
+            body.put("reviewCategories",  rule.getReviewCategories());
+            return ResponseEntity.ok(body);
+        }).orElseGet(() -> ResponseEntity.status(404).body(
                 Map.of("error", "MerchantCategoryRule is disabled. Set fraud.rules.merchant-category.enabled=true to activate.")));
     }
 
@@ -110,14 +110,14 @@ public class RuleConfigController {
     @Operation(summary = "Add or remove categories from the MerchantCategoryRule review list")
     public ResponseEntity<?> updateMerchantReviewCategories(
             @RequestBody MerchantCategoryConfigRequest request) {
-        return merchantCategoryRule.map(rule -> {
+        return merchantCategoryRule.<ResponseEntity<?>>map(rule -> {
             request.add().forEach(rule::addReviewCategory);
             request.remove().forEach(rule::removeReviewCategory);
-            return ResponseEntity.ok(Map.of(
-                    "declineCategories", rule.getDeclineCategories(),
-                    "reviewCategories", rule.getReviewCategories()
-            ));
-        }).orElse(ResponseEntity.status(404).body(
+            Map<String, Object> body = new LinkedHashMap<>();
+            body.put("declineCategories", rule.getDeclineCategories());
+            body.put("reviewCategories",  rule.getReviewCategories());
+            return ResponseEntity.ok(body);
+        }).orElseGet(() -> ResponseEntity.status(404).body(
                 Map.of("error", "MerchantCategoryRule is disabled. Set fraud.rules.merchant-category.enabled=true to activate.")));
     }
 

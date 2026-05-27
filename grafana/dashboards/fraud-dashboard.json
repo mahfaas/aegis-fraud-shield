@@ -1,98 +1,95 @@
 {
-  "annotations": {
-    "list": []
-  },
+  "annotations": { "list": [] },
   "editable": true,
   "fiscalYearStartMonth": 0,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
   "id": null,
   "links": [],
   "liveNow": false,
+  "refresh": "10s",
   "panels": [
+
     {
-      "title": "Transactions Per Second",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "rate(fraud_transactions_received_total[1m])",
-          "legendFormat": "Received"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": { "drawStyle": "line", "lineWidth": 2 }
-        }
-      }
-    },
-    {
-      "title": "Verdicts Distribution",
-      "type": "piechart",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "fraud_transactions_verdicted_total",
-          "legendFormat": "{{verdict}}"
-        }
-      ]
-    },
-    {
-      "title": "Verdict Counters",
+      "id": 1,
+      "title": "🚦 Active Rules",
       "type": "stat",
-      "gridPos": { "h": 4, "w": 24, "x": 0, "y": 8 },
+      "gridPos": { "h": 3, "w": 4, "x": 0, "y": 0 },
       "datasource": "Prometheus",
       "targets": [
-        {
-          "expr": "fraud_transactions_verdicted_total",
-          "legendFormat": "{{verdict}}"
-        }
+        { "expr": "fraud_engine_active_rules", "legendFormat": "Rules loaded" }
       ],
       "fieldConfig": {
         "defaults": {
-          "thresholds": {
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 10 },
-              { "color": "red", "value": 50 }
-            ]
-          }
+          "color": { "mode": "fixed", "fixedColor": "blue" },
+          "thresholds": { "steps": [{ "color": "blue", "value": null }] },
+          "mappings": []
         }
-      }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "orientation": "auto", "textMode": "auto", "colorMode": "background" }
     },
+
     {
-      "title": "Processing Latency (p95)",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 12 },
-      "datasource": "Prometheus",
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, rate(fraud_processing_time_seconds_bucket[5m]))",
-          "legendFormat": "p95"
-        },
-        {
-          "expr": "histogram_quantile(0.50, rate(fraud_processing_time_seconds_bucket[5m]))",
-          "legendFormat": "p50"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s",
-          "custom": { "drawStyle": "line", "lineWidth": 2 }
-        }
-      }
-    },
-    {
-      "title": "DLQ Messages",
+      "id": 2,
+      "title": "✅ Total Approved",
       "type": "stat",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 12 },
+      "gridPos": { "h": 3, "w": 5, "x": 4, "y": 0 },
       "datasource": "Prometheus",
       "targets": [
-        {
-          "expr": "fraud_transactions_dlq_total",
-          "legendFormat": "DLQ Total"
+        { "expr": "fraud_transactions_verdicted_total{verdict=\"APPROVED\"}", "legendFormat": "Approved" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "green" },
+          "thresholds": { "steps": [{ "color": "green", "value": null }] }
         }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+
+    {
+      "id": 3,
+      "title": "🚫 Total Declined",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 5, "x": 9, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "fraud_transactions_verdicted_total{verdict=\"DECLINED\"}", "legendFormat": "Declined" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "red" },
+          "thresholds": { "steps": [{ "color": "red", "value": null }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+
+    {
+      "id": 4,
+      "title": "⚠️ Manual Review",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 5, "x": 14, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "fraud_transactions_verdicted_total{verdict=\"MANUAL_REVIEW\"}", "legendFormat": "Manual Review" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "orange" },
+          "thresholds": { "steps": [{ "color": "orange", "value": null }] }
+        }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+
+    {
+      "id": 5,
+      "title": "💀 DLQ Total",
+      "type": "stat",
+      "gridPos": { "h": 3, "w": 5, "x": 19, "y": 0 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "fraud_transactions_dlq_total", "legendFormat": "DLQ" }
       ],
       "fieldConfig": {
         "defaults": {
@@ -104,25 +101,164 @@
             ]
           }
         }
+      },
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "colorMode": "background" }
+    },
+
+    {
+      "id": 6,
+      "title": "📈 Transactions Per Second",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 3 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "rate(fraud_transactions_received_total[1m])", "legendFormat": "Received/s" },
+        { "expr": "rate(fraud_transactions_verdicted_total{verdict=\"APPROVED\"}[1m])", "legendFormat": "Approved/s" },
+        { "expr": "rate(fraud_transactions_verdicted_total{verdict=\"DECLINED\"}[1m])", "legendFormat": "Declined/s" },
+        { "expr": "rate(fraud_transactions_verdicted_total{verdict=\"MANUAL_REVIEW\"}[1m])", "legendFormat": "Review/s" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10 },
+          "unit": "reqps"
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Approved/s" },  "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+          { "matcher": { "id": "byName", "options": "Declined/s" },  "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byName", "options": "Review/s" },    "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byName", "options": "Received/s" },  "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "blue" } }] }
+        ]
       }
     },
+
     {
-      "title": "Rules Triggered",
+      "id": 7,
+      "title": "🥧 Verdict Distribution",
+      "type": "piechart",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 3 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "fraud_transactions_verdicted_total", "legendFormat": "{{verdict}}" }
+      ],
+      "options": {
+        "pieType": "donut",
+        "displayLabels": ["name", "percent"]
+      },
+      "fieldConfig": {
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "APPROVED" },      "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+          { "matcher": { "id": "byName", "options": "DECLINED" },      "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] },
+          { "matcher": { "id": "byName", "options": "MANUAL_REVIEW" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] }
+        ]
+      }
+    },
+
+    {
+      "id": 8,
+      "title": "⏱️ Processing Latency (P50 / P95 / P99)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 20 },
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 11 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "histogram_quantile(0.50, rate(fraud_processing_time_seconds_bucket[5m]))", "legendFormat": "P50" },
+        { "expr": "histogram_quantile(0.95, rate(fraud_processing_time_seconds_bucket[5m]))", "legendFormat": "P95" },
+        { "expr": "histogram_quantile(0.99, rate(fraud_processing_time_seconds_bucket[5m]))", "legendFormat": "P99" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "lineWidth": 2 }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "P50" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "green" } }] },
+          { "matcher": { "id": "byName", "options": "P95" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "orange" } }] },
+          { "matcher": { "id": "byName", "options": "P99" }, "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }] }
+        ]
+      }
+    },
+
+    {
+      "id": 9,
+      "title": "💀 DLQ Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 11 },
+      "datasource": "Prometheus",
+      "targets": [
+        { "expr": "rate(fraud_transactions_dlq_total[1m])", "legendFormat": "DLQ/s" }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "bars", "lineWidth": 1, "fillOpacity": 80 },
+          "color": { "mode": "fixed", "fixedColor": "dark-red" },
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red", "value": 0.01 }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 10,
+      "title": "🔥 Per-Rule Trigger Rate",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 19 },
       "datasource": "Prometheus",
       "targets": [
         {
-          "expr": "rate(fraud_rules_triggered_total[1m])",
-          "legendFormat": "Rules triggered/min"
+          "expr": "rate(fraud_rules_triggered_total{rule!=\"ALL\"}[1m])",
+          "legendFormat": "{{rule}}"
         }
-      ]
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 10 }
+        }
+      }
+    },
+
+    {
+      "id": 11,
+      "title": "📊 Rule Trigger Totals",
+      "type": "bargauge",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 19 },
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "fraud_rules_triggered_total{rule!=\"ALL\"}",
+          "legendFormat": "{{rule}}"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "displayMode": "gradient"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 10 },
+              { "color": "red", "value": 100 }
+            ]
+          }
+        }
+      }
     }
+
   ],
   "schemaVersion": 39,
-  "tags": ["fraud", "monitoring"],
+  "tags": ["fraud", "monitoring", "aegis"],
   "templating": { "list": [] },
   "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
   "title": "Aegis Fraud-Shield Dashboard",
-  "uid": "fraudshield-main"
+  "uid": "fraudshield-main",
+  "version": 2
 }

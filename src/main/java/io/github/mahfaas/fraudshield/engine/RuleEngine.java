@@ -43,6 +43,14 @@ public class RuleEngine {
     }
 
     /**
+     * Returns the number of currently registered rules.
+     * Exposed for the {@code fraud.engine.active_rules} Gauge metric.
+     */
+    public int getRuleCount() {
+        return rules.size();
+    }
+
+    /**
      * Evaluate a transaction against all rules.
      *
      * @param transaction the incoming transaction
