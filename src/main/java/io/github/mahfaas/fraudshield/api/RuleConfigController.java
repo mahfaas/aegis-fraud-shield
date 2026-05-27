@@ -28,7 +28,7 @@ public class RuleConfigController {
 
     private final AmountAnomalyRule amountAnomalyRule;
     private final VelocityRule velocityRule;
-    private final GeoVelocityRule geoVelocityRule;
+    private final Optional<GeoVelocityRule> geoVelocityRule;
     private final Optional<MerchantCategoryRule> merchantCategoryRule;
 
     @GetMapping
@@ -43,9 +43,13 @@ public class RuleConfigController {
                 "maxTransactions", velocityRule.getMaxTransactions(),
                 "windowSeconds", velocityRule.getWindowSeconds()
         ));
-        config.put("GEO_VELOCITY", Map.of(
-                "windowSeconds", GeoVelocityRule.WINDOW_SECONDS
-        ));
+        geoVelocityRule.ifPresentOrElse(
+                rule -> config.put("GEO_VELOCITY", Map.of(
+                        "enabled", true,
+                        "windowSeconds", GeoVelocityRule.WINDOW_SECONDS
+                )),
+                () -> config.put("GEO_VELOCITY", Map.of("enabled", false))
+        );
         merchantCategoryRule.ifPresentOrElse(
                 rule -> config.put("MERCHANT_CATEGORY", Map.of(
                         "enabled", true,

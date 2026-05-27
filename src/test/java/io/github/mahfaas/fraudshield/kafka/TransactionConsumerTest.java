@@ -27,17 +27,11 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class TransactionConsumerTest {
 
-    @Mock
-    private TransactionValidator validator;
-
-    @Mock
-    private RuleEngine ruleEngine;
-
-    @Mock
-    private VerdictProducer verdictProducer;
-
-    @Mock
-    private FraudMetrics metrics;
+    @Mock private TransactionValidator validator;
+    @Mock private RuleEngine ruleEngine;
+    @Mock private VerdictProducer verdictProducer;
+    @Mock private FraudMetrics metrics;
+    @Mock private IdempotencyService idempotencyService;
 
     @InjectMocks
     private TransactionConsumer consumer;
@@ -45,6 +39,8 @@ class TransactionConsumerTest {
     @BeforeEach
     void setUp() {
         lenient().when(metrics.startTimer()).thenReturn(mock(Timer.Sample.class));
+        // Default: not a duplicate
+        lenient().when(idempotencyService.isDuplicate(anyString())).thenReturn(false);
     }
 
     private Transaction validTransaction() {
@@ -65,11 +61,9 @@ class TransactionConsumerTest {
     void shouldProcessValidTransaction() {
         Transaction tx = validTransaction();
         VerdictedTransaction verdict = VerdictedTransaction.builder()
-                .transaction(tx)
-                .verdict(Verdict.APPROVED)
-                .reasons(Collections.emptyList())
-                .processedAt(Instant.now())
-                .build();
+                .transaction(tx).verdict(Verdict.APPROVED)
+                .reasons(Collections.emptyList()).totalRiskScore(0)
+                .processedAt(Instant.now()).build();
 
         when(validator.validate(tx)).thenReturn(Collections.emptyList());
         when(ruleEngine.evaluate(tx)).thenReturn(verdict);
@@ -85,7 +79,6 @@ class TransactionConsumerTest {
     @DisplayName("Should route invalid transaction to DLQ")
     void shouldRouteInvalidToDlq() {
         Transaction tx = validTransaction();
-
         when(validator.validate(tx)).thenReturn(List.of("amount must be positive"));
 
         consumer.consume(tx);
@@ -104,5 +97,32 @@ class TransactionConsumerTest {
         consumer.consume(tx);
 
         verify(ruleEngine, never()).evaluate(any());
+    }
+
+    @Test
+    @DisplayName("Should skip duplicate transactions without calling RuleEngine")
+    void shouldSkipDuplicateTransaction() {
+        Transaction tx = validTransaction();
+        when(idempotencyService.isDuplicate(tx.getTransactionId())).thenReturn(true);
+
+        consumer.consume(tx);
+
+        verify(ruleEngine, never()).evaluate(any());
+        verify(verdictProducer, never()).send(any());
+        verify(verdictProducer, never()).sendToDlq(anyString(), anyString());
+        verify(validator, never()).validate(any());
+    }
+
+    @Test
+    @DisplayName("Should check idempotency before validation")
+    void shouldCheckIdempotencyBeforeValidation() {
+        Transaction tx = validTransaction();
+        when(idempotencyService.isDuplicate(anyString())).thenReturn(true);
+
+        consumer.consume(tx);
+
+        // Idempotency short-circuits — validator must not be called
+        verify(idempotencyService).isDuplicate(tx.getTransactionId());
+        verify(validator, never()).validate(any());
     }
 }

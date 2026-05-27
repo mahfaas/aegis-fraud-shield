@@ -47,6 +47,8 @@ fraud:
       window-seconds: 60
     merchant-category:
       enabled: false   # set to true to activate MerchantCategoryRule
+    geo-velocity:
+      enabled: true    # set to false to disable GeoVelocityRule (e.g. if Redis is unavailable)
 
   kafka:
     topic-in: transactions-raw

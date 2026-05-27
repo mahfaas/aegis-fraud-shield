@@ -4,6 +4,7 @@ import io.github.mahfaas.fraudshield.engine.Rule;
 import io.github.mahfaas.fraudshield.engine.RuleResult;
 import io.github.mahfaas.fraudshield.model.Transaction;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Component;
 
@@ -21,6 +22,7 @@ import java.time.Instant;
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(name = "fraud.rules.geo-velocity.enabled", havingValue = "true", matchIfMissing = true)
 public class GeoVelocityRule implements Rule {
 
     private static final String RULE_NAME = "GEO_VELOCITY";
