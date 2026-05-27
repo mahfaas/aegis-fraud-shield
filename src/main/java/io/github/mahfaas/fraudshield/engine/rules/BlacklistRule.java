@@ -81,15 +81,41 @@ public class BlacklistRule implements Rule {
         return Set.copyOf(blacklistedBins);
     }
 
+    /** Convenience method for testing and status checks. */
+    public boolean isIpBlacklisted(String ip) {
+        return blacklistedIps.contains(ip);
+    }
+
+    /** Convenience method for testing and status checks. */
+    public boolean isBinBlacklisted(String bin) {
+        return blacklistedBins.contains(bin);
+    }
+
+    /**
+     * Clears all in-memory entries. Intended for test setup / full reloads.
+     */
+    public void clear() {
+        blacklistedIps.clear();
+        blacklistedBins.clear();
+        log.info("Cleared all blacklist entries from memory");
+    }
+
     /**
      * Bulk-load blacklist entries (called on startup from DB).
+     * Replaces all existing in-memory IPs.
      */
     public void loadIps(Iterable<String> ips) {
+        blacklistedIps.clear();
         ips.forEach(blacklistedIps::add);
         log.info("Loaded {} IPs into blacklist", blacklistedIps.size());
     }
 
+    /**
+     * Bulk-load blacklist entries (called on startup from DB).
+     * Replaces all existing in-memory BINs.
+     */
     public void loadBins(Iterable<String> bins) {
+        blacklistedBins.clear();
         bins.forEach(blacklistedBins::add);
         log.info("Loaded {} BINs into blacklist", blacklistedBins.size());
     }
