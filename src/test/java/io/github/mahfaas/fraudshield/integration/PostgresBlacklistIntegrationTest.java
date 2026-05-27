@@ -13,6 +13,8 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.utility.DockerImageName;
+import org.junit.jupiter.api.Disabled;
 
 import java.util.List;
 
@@ -28,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({BlacklistService.class, BlacklistRule.class})
 @DisplayName("BlacklistService — PostgreSQL Integration Tests")
+@Disabled("Requires Docker")
 class PostgresBlacklistIntegrationTest {
 
     @Container

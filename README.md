@@ -74,7 +74,7 @@ graph TB
 | Amount Anomaly | Flags transactions exceeding configurable risk limits | 50 / 100 | Memory | ✅ |
 | Velocity | Detects high-frequency spending patterns per account | 100 (DECLINED) | Redis | ✅ |
 | Geo-Velocity | Prevents "impossible travel" by evaluating country changes | 50 (MANUAL_REVIEW) | Redis | ✅ |
-| Merchant Category | Blocks or flags transactions by merchant category (gambling, crypto…) | 50 / 100 | Memory | ⚙️ opt-in |
+| Merchant Category | Blocks or flags transactions by merchant category (gambling, crypto…) | 50 / 100 | PostgreSQL + Memory | ⚙️ opt-in |
 
 Each rule contributes a numeric `riskScore` to the total. The `totalRiskScore` in the verdict response represents the aggregate risk level across all evaluated rules.
 

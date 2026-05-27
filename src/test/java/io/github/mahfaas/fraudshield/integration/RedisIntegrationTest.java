@@ -12,6 +12,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
+import org.junit.jupiter.api.Disabled;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -29,6 +30,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @Testcontainers
 @DisplayName("VelocityRule — Redis Integration Tests")
+@Disabled("Requires Docker")
 class RedisIntegrationTest {
 
     @Container

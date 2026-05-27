@@ -3,6 +3,7 @@ package io.github.mahfaas.fraudshield;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 /**
  * Smoke test verifying the Spring application context loads without errors.
@@ -24,6 +25,21 @@ import org.springframework.test.context.TestPropertySource;
         "spring.main.allow-bean-definition-overriding=true"
 })
 class FraudshieldApplicationTests {
+
+    @MockitoBean
+    private io.github.mahfaas.fraudshield.engine.rules.MerchantCategoryConfigRepository merchantCategoryConfigRepository;
+
+    @MockitoBean
+    private io.github.mahfaas.fraudshield.blacklist.BlacklistRepository blacklistRepository;
+
+    @MockitoBean
+    private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
+
+    @MockitoBean
+    private org.springframework.data.redis.connection.RedisConnectionFactory redisConnectionFactory;
+
+    @MockitoBean
+    private org.springframework.kafka.core.KafkaTemplate<String, Object> kafkaTemplate;
 
     @Test
     void contextLoads() {

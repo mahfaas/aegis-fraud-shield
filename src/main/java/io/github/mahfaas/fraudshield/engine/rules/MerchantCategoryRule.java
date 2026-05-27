@@ -3,6 +3,8 @@ package io.github.mahfaas.fraudshield.engine.rules;
 import io.github.mahfaas.fraudshield.engine.Rule;
 import io.github.mahfaas.fraudshield.engine.RuleResult;
 import io.github.mahfaas.fraudshield.model.Transaction;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
@@ -21,9 +23,12 @@ import java.util.concurrent.ConcurrentHashMap;
 @Slf4j
 @Component
 @ConditionalOnProperty(name = "fraud.rules.merchant-category.enabled", havingValue = "true", matchIfMissing = false)
+@RequiredArgsConstructor
 public class MerchantCategoryRule implements Rule {
 
     private static final String RULE_NAME = "MERCHANT_CATEGORY";
+
+    private final MerchantCategoryConfigRepository repository;
 
     /** Categories that trigger an immediate DECLINE. */
     private final Set<String> declineCategories = ConcurrentHashMap.newKeySet();
@@ -31,11 +36,16 @@ public class MerchantCategoryRule implements Rule {
     /** Categories that trigger a MANUAL_REVIEW flag. */
     private final Set<String> reviewCategories = ConcurrentHashMap.newKeySet();
 
-    public MerchantCategoryRule() {
-        // Well-known high-risk MCC categories pre-loaded as defaults
-        declineCategories.addAll(Set.of("darkweb", "illegal"));
-        reviewCategories.addAll(Set.of("gambling", "crypto", "adult", "firearms", "wire_transfer"));
-        log.info("MerchantCategoryRule initialized: declineCategories={}, reviewCategories={}",
+    @PostConstruct
+    public void init() {
+        repository.findAll().forEach(config -> {
+            if ("DECLINE".equalsIgnoreCase(config.getAction())) {
+                declineCategories.add(config.getCategory());
+            } else if ("REVIEW".equalsIgnoreCase(config.getAction())) {
+                reviewCategories.add(config.getCategory());
+            }
+        });
+        log.info("MerchantCategoryRule initialized from DB: declineCategories={}, reviewCategories={}",
                 declineCategories, reviewCategories);
     }
 

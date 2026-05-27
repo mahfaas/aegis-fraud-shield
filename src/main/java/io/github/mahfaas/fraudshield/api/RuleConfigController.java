@@ -4,10 +4,13 @@ import io.github.mahfaas.fraudshield.engine.rules.AmountAnomalyRule;
 import io.github.mahfaas.fraudshield.engine.rules.GeoVelocityRule;
 import io.github.mahfaas.fraudshield.engine.rules.MerchantCategoryRule;
 import io.github.mahfaas.fraudshield.engine.rules.VelocityRule;
+import io.github.mahfaas.fraudshield.engine.rules.MerchantCategoryConfig;
+import io.github.mahfaas.fraudshield.engine.rules.MerchantCategoryConfigRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -30,6 +33,7 @@ public class RuleConfigController {
     private final VelocityRule velocityRule;
     private final Optional<GeoVelocityRule> geoVelocityRule;
     private final Optional<MerchantCategoryRule> merchantCategoryRule;
+    private final MerchantCategoryConfigRepository merchantCategoryConfigRepository;
 
     @GetMapping
     @Operation(summary = "Get current configuration of all rules")
@@ -91,13 +95,25 @@ public class RuleConfigController {
         );
     }
 
+    @Transactional
     @PutMapping("/merchant-category/decline")
     @Operation(summary = "Add or remove categories from the MerchantCategoryRule decline list")
     public ResponseEntity<?> updateMerchantDeclineCategories(
             @RequestBody MerchantCategoryConfigRequest request) {
         return merchantCategoryRule.<ResponseEntity<?>>map(rule -> {
-            request.add().forEach(rule::addDeclineCategory);
-            request.remove().forEach(rule::removeDeclineCategory);
+            request.add().forEach(c -> {
+                String cat = c.trim().toLowerCase();
+                rule.addDeclineCategory(cat);
+                merchantCategoryConfigRepository.findByCategory(cat).ifPresentOrElse(
+                        existing -> { existing.setAction("DECLINE"); merchantCategoryConfigRepository.save(existing); },
+                        () -> merchantCategoryConfigRepository.save(MerchantCategoryConfig.builder().category(cat).action("DECLINE").build())
+                );
+            });
+            request.remove().forEach(c -> {
+                String cat = c.trim().toLowerCase();
+                rule.removeDeclineCategory(cat);
+                merchantCategoryConfigRepository.deleteByCategory(cat);
+            });
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("declineCategories", rule.getDeclineCategories());
             body.put("reviewCategories",  rule.getReviewCategories());
@@ -106,13 +122,25 @@ public class RuleConfigController {
                 Map.of("error", "MerchantCategoryRule is disabled. Set fraud.rules.merchant-category.enabled=true to activate.")));
     }
 
+    @Transactional
     @PutMapping("/merchant-category/review")
     @Operation(summary = "Add or remove categories from the MerchantCategoryRule review list")
     public ResponseEntity<?> updateMerchantReviewCategories(
             @RequestBody MerchantCategoryConfigRequest request) {
         return merchantCategoryRule.<ResponseEntity<?>>map(rule -> {
-            request.add().forEach(rule::addReviewCategory);
-            request.remove().forEach(rule::removeReviewCategory);
+            request.add().forEach(c -> {
+                String cat = c.trim().toLowerCase();
+                rule.addReviewCategory(cat);
+                merchantCategoryConfigRepository.findByCategory(cat).ifPresentOrElse(
+                        existing -> { existing.setAction("REVIEW"); merchantCategoryConfigRepository.save(existing); },
+                        () -> merchantCategoryConfigRepository.save(MerchantCategoryConfig.builder().category(cat).action("REVIEW").build())
+                );
+            });
+            request.remove().forEach(c -> {
+                String cat = c.trim().toLowerCase();
+                rule.removeReviewCategory(cat);
+                merchantCategoryConfigRepository.deleteByCategory(cat);
+            });
             Map<String, Object> body = new LinkedHashMap<>();
             body.put("declineCategories", rule.getDeclineCategories());
             body.put("reviewCategories",  rule.getReviewCategories());

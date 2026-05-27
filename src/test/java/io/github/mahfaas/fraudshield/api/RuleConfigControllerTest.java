@@ -28,6 +28,9 @@ class RuleConfigControllerTest {
     @MockitoBean
     private VelocityRule velocityRule;
 
+    @MockitoBean
+    private io.github.mahfaas.fraudshield.engine.rules.MerchantCategoryConfigRepository merchantCategoryConfigRepository;
+
     @Test
     @DisplayName("GET /api/v1/rules/config — should return current config")
     void shouldGetConfig() throws Exception {
