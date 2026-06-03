@@ -1,0 +1,102 @@
+package io.github.mahfaas.fraudshield.api;
+
+import io.github.mahfaas.fraudshield.audit.AuditLogSummary;
+import io.github.mahfaas.fraudshield.audit.AuditService;
+import io.github.mahfaas.fraudshield.model.Verdict;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.Map;
+
+/**
+ * REST API exposing the audit log of all processed transactions.
+ *
+ * <p>All list endpoints return a {@link PagedResponse}{@code <AuditLogSummary>} — the
+ * generic wrapper enforces a consistent pagination envelope across the entire API.
+ */
+@RestController
+@RequestMapping("/api/v1/audit")
+@RequiredArgsConstructor
+@Tag(name = "Audit Log", description = "Query the fraud-decision history for all processed transactions")
+public class AuditController {
+
+    private final AuditService auditService;
+
+    /**
+     * Returns a paginated list of all audit entries, newest first.
+     *
+     * <p>The {@code <AuditLogSummary>} type argument demonstrates that {@link PagedResponse}
+     * is a genuine generic type — not a raw type or {@code Object} wrapper.
+     *
+     * @param page zero-based page index (default 0)
+     * @param size items per page (default 20, max 100)
+     */
+    @GetMapping
+    @Operation(
+            summary = "List all audit entries",
+            description = "Returns a paginated audit log of every transaction processed by the Rule Engine, newest first."
+    )
+    public PagedResponse<AuditLogSummary> getAll(
+            @Parameter(description = "Zero-based page index") @RequestParam(defaultValue = "0")  int page,
+            @Parameter(description = "Page size (max 100)")   @RequestParam(defaultValue = "20") int size) {
+
+        int safeSize = Math.min(size, 100);
+        return auditService.getPage(page, safeSize);
+    }
+
+    /**
+     * Returns audit entries filtered by a specific verdict.
+     *
+     * @param verdict one of {@code APPROVED}, {@code DECLINED}, {@code MANUAL_REVIEW}
+     * @param page    zero-based page index
+     * @param size    items per page (max 100)
+     */
+    @GetMapping("/by-verdict/{verdict}")
+    @Operation(
+            summary = "List audit entries by verdict",
+            description = "Returns paginated audit entries filtered by APPROVED, DECLINED, or MANUAL_REVIEW."
+    )
+    public PagedResponse<AuditLogSummary> getByVerdict(
+            @PathVariable Verdict verdict,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        int safeSize = Math.min(size, 100);
+        return auditService.getPageByVerdict(verdict, page, safeSize);
+    }
+
+    /**
+     * Returns a per-verdict count breakdown using the JPQL GROUP BY query.
+     *
+     * @return map of {@code "APPROVED" → 8800, "DECLINED" → 1100, …}
+     */
+    @GetMapping("/stats/verdict-counts")
+    @Operation(
+            summary = "Verdict count breakdown",
+            description = "Returns total transaction counts grouped by verdict, sourced from a JPQL GROUP BY query."
+    )
+    public Map<Verdict, Long> getVerdictCounts() {
+        return auditService.getVerdictStats();
+    }
+
+    /**
+     * Returns a rich stats snapshot for the last 24 hours.
+     *
+     * <p>The underlying {@link AuditService#getLast24hStats()} method uses
+     * {@code Collectors.groupingBy}, predicate composition, stream {@code flatMap},
+     * and {@code reduce} — making this endpoint a live demonstration of the
+     * functional-programming skill set.
+     */
+    @GetMapping("/stats/last-24h")
+    @Operation(
+            summary = "Last-24h audit stats",
+            description = "Returns a rich stats snapshot: totals by verdict, actionable declines, " +
+                          "total declined amount, and top triggered rules — all derived via stream pipelines."
+    )
+    public AuditService.AuditStats getLast24hStats() {
+        return auditService.getLast24hStats();
+    }
+}

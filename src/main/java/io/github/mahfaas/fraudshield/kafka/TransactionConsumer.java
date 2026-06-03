@@ -1,5 +1,6 @@
 package io.github.mahfaas.fraudshield.kafka;
 
+import io.github.mahfaas.fraudshield.audit.AuditService;
 import io.github.mahfaas.fraudshield.engine.RuleEngine;
 import io.github.mahfaas.fraudshield.metrics.FraudMetrics;
 import io.github.mahfaas.fraudshield.model.Transaction;
@@ -42,6 +43,7 @@ public class TransactionConsumer {
     private final VerdictProducer verdictProducer;
     private final FraudMetrics metrics;
     private final IdempotencyService idempotencyService;
+    private final AuditService auditService;
 
     @KafkaListener(
             topics = "${fraud.kafka.topic-in}",
@@ -80,6 +82,7 @@ public class TransactionConsumer {
             metrics.stopTimer(timer);
 
             verdictProducer.send(result);
+            auditService.record(result);           // persist to audit_log
             metrics.recordVerdict(result.getVerdict());
 
             log.info("Processed txId={} → verdict={} riskScore={}",
