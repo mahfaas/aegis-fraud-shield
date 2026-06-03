@@ -6,6 +6,7 @@ import io.github.mahfaas.fraudshield.engine.rules.MerchantCategoryRule;
 import io.github.mahfaas.fraudshield.engine.rules.VelocityRule;
 import io.github.mahfaas.fraudshield.engine.rules.MerchantCategoryConfig;
 import io.github.mahfaas.fraudshield.engine.rules.MerchantCategoryConfigRepository;
+import io.github.mahfaas.fraudshield.exception.RuleNotFoundException;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -118,8 +119,7 @@ public class RuleConfigController {
             body.put("declineCategories", rule.getDeclineCategories());
             body.put("reviewCategories",  rule.getReviewCategories());
             return ResponseEntity.ok(body);
-        }).orElseGet(() -> ResponseEntity.status(404).body(
-                Map.of("error", "MerchantCategoryRule is disabled. Set fraud.rules.merchant-category.enabled=true to activate.")));
+        }).orElseThrow(() -> new RuleNotFoundException("MERCHANT_CATEGORY"));
     }
 
     @Transactional
@@ -145,8 +145,7 @@ public class RuleConfigController {
             body.put("declineCategories", rule.getDeclineCategories());
             body.put("reviewCategories",  rule.getReviewCategories());
             return ResponseEntity.ok(body);
-        }).orElseGet(() -> ResponseEntity.status(404).body(
-                Map.of("error", "MerchantCategoryRule is disabled. Set fraud.rules.merchant-category.enabled=true to activate.")));
+        }).orElseThrow(() -> new RuleNotFoundException("MERCHANT_CATEGORY"));
     }
 
     // ── Request records ──────────────────────────────────────────────────────

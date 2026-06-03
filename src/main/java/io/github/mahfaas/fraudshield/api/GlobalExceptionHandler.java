@@ -1,33 +1,100 @@
 package io.github.mahfaas.fraudshield.api;
 
+import io.github.mahfaas.fraudshield.exception.FraudShieldException;
+import io.github.mahfaas.fraudshield.exception.TransactionValidationException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-
-import java.time.Instant;
-import java.util.Map;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
 /**
- * Global exception handler for REST API.
+ * Centralised exception → HTTP response mapping for the Fraud-Shield REST API.
+ *
+ * <p>Handler resolution order (most specific → least specific):
+ * <ol>
+ *   <li>{@link TransactionValidationException} — 422 with per-field violations list</li>
+ *   <li>Any other {@link FraudShieldException} subtype — status from the exception itself</li>
+ *   <li>{@link MethodArgumentTypeMismatchException} — 400 for bad path/query params</li>
+ *   <li>Catch-all {@link Exception} — 500</li>
+ * </ol>
+ *
+ * <p>All responses use the structured {@link ErrorResponse} record so clients
+ * always parse the same shape, regardless of which error occurred.
  */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(IllegalArgumentException.class)
-    public ResponseEntity<Map<String, Object>> handleIllegalArgument(IllegalArgumentException ex) {
-        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(Map.of(
-                "error", ex.getMessage(),
-                "timestamp", Instant.now().toString()
-        ));
+    // ── Domain exceptions ────────────────────────────────────────────────────
+
+    /**
+     * Handles validation failures that carry an individual violations list.
+     * Responds with {@code 422 Unprocessable Entity}.
+     */
+    @ExceptionHandler(TransactionValidationException.class)
+    public ResponseEntity<ErrorResponse> handleValidation(TransactionValidationException ex) {
+        log.warn("Transaction validation error: {}", ex.getMessage());
+        ErrorResponse body = ErrorResponse.ofViolations(
+                ex.getStatus().value(),
+                ex.getStatus().getReasonPhrase(),
+                ex.getMessage(),
+                ex.getViolations()
+        );
+        return ResponseEntity.status(ex.getStatus()).body(body);
     }
 
+    /**
+     * Polymorphic handler for every other {@link FraudShieldException} subtype
+     * ({@code BlacklistConflictException}, {@code RuleNotFoundException}, …).
+     * The HTTP status is taken directly from the exception itself, so adding a
+     * new subtype never requires touching this handler.
+     */
+    @ExceptionHandler(FraudShieldException.class)
+    public ResponseEntity<ErrorResponse> handleDomain(FraudShieldException ex) {
+        log.warn("Domain exception [{}]: {}", ex.getClass().getSimpleName(), ex.getMessage());
+        ErrorResponse body = ErrorResponse.of(
+                ex.getStatus().value(),
+                ex.getStatus().getReasonPhrase(),
+                ex.getMessage()
+        );
+        return ResponseEntity.status(ex.getStatus()).body(body);
+    }
+
+    // ── Spring / web exceptions ──────────────────────────────────────────────
+
+    /**
+     * Handles malformed path variable or query parameter types
+     * (e.g. passing {@code "abc"} for a {@code BlacklistType} enum).
+     */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ResponseEntity<ErrorResponse> handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
+        String message = "Invalid value '" + ex.getValue()
+                + "' for parameter '" + ex.getName() + "'";
+        log.warn("Type mismatch: {}", message);
+        ErrorResponse body = ErrorResponse.of(
+                HttpStatus.BAD_REQUEST.value(),
+                HttpStatus.BAD_REQUEST.getReasonPhrase(),
+                message
+        );
+        return ResponseEntity.badRequest().body(body);
+    }
+
+    // ── Catch-all ────────────────────────────────────────────────────────────
+
+    /**
+     * Last-resort handler. Logs the full stack trace and returns a generic
+     * {@code 500} without leaking internal details to the client.
+     */
     @ExceptionHandler(Exception.class)
-    public ResponseEntity<Map<String, Object>> handleGeneral(Exception ex) {
-        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Map.of(
-                "error", "Internal server error",
-                "message", ex.getMessage() != null ? ex.getMessage() : "Unknown error",
-                "timestamp", Instant.now().toString()
-        ));
+    public ResponseEntity<ErrorResponse> handleGeneral(Exception ex) {
+        log.error("Unhandled exception", ex);
+        ErrorResponse body = ErrorResponse.of(
+                HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                HttpStatus.INTERNAL_SERVER_ERROR.getReasonPhrase(),
+                "An unexpected error occurred. Please try again later."
+        );
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(body);
     }
 }

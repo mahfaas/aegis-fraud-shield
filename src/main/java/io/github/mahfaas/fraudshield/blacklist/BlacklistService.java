@@ -1,6 +1,7 @@
 package io.github.mahfaas.fraudshield.blacklist;
 
 import io.github.mahfaas.fraudshield.engine.rules.BlacklistRule;
+import io.github.mahfaas.fraudshield.exception.BlacklistConflictException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,8 +37,7 @@ public class BlacklistService {
     @Transactional
     public BlacklistEntity addEntry(BlacklistType type, String value, String reason) {
         if (repository.existsByTypeAndValue(type, value)) {
-            throw new IllegalArgumentException(
-                    "Entry already exists: type=" + type + ", value=" + value);
+            throw new BlacklistConflictException(type, value);
         }
 
         BlacklistEntity entity = BlacklistEntity.builder()
