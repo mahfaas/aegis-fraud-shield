@@ -1,0 +1,10 @@
+# Exclude build artifacts, IDE files, and anything not needed by the Dockerfile.
+# A lean build context speeds up `docker build` by reducing the data sent to the daemon.
+
+target/
+.git/
+.idea/
+*.iml
+.mvn/wrapper/maven-wrapper.jar
+**/*.class
+**/*.log

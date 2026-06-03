@@ -9,6 +9,7 @@
     <img src="https://img.shields.io/badge/Kafka-Event%20Streaming-black.svg" alt="Kafka" />
     <img src="https://img.shields.io/badge/Redis-Caching-red.svg" alt="Redis" />
     <img src="https://img.shields.io/badge/PostgreSQL-Database-blue.svg" alt="PostgreSQL" />
+    <img src="https://img.shields.io/badge/JUnit%205-60%2B%20Tests-blueviolet.svg" alt="Tests" />
   </p>
 </div>
 
@@ -20,14 +21,16 @@ Aegis Fraud-Shield is a high-performance system designed to evaluate financial t
 
 ### ✨ Key Features
 
-- ⚡️ Low Latency: In-memory and Redis caching for blazing fast validations.
-- 🔗 Event-Driven: Fully decoupled, scalable architecture using Apache Kafka.
-- 🧱 Extensible Rules Execution: Easily plug in new fraud detection strategies without modifying the core.
-- 📊 Rich Observability: Built-in Micrometer, Prometheus, and Grafana stack for monitoring TPS, latency, and rule triggers.
-- 🌐 Dynamic Configuration: Adjust fraud thresholds on-the-fly via REST API with zero downtime.
-- 🛠 Automated Generation: Integrated synthetic transaction producer for immediate load testing.
-- 🎯 Risk Scoring: Numeric risk score aggregation across all rules — provides granular risk assessment beyond binary verdicts.
-- ✅ Strict Validation: ISO 4217 currency format enforcement and comprehensive input validation before rule evaluation.
+- ⚡️ **Low Latency:** In-memory and Redis caching for blazing fast validations.
+- 🔗 **Event-Driven:** Fully decoupled, scalable architecture using Apache Kafka.
+- 🧱 **Extensible Rules Execution:** Easily plug in new fraud detection strategies without modifying the core.
+- 📊 **Rich Observability:** Built-in Micrometer, Prometheus, and Grafana stack for monitoring TPS, latency, and rule triggers.
+- 🌐 **Dynamic Configuration:** Adjust fraud thresholds on-the-fly via REST API with zero downtime. Rule configs are backed by PostgreSQL with `@OneToMany` metadata tags.
+- 📝 **Comprehensive Audit Log:** Every processed transaction is durably recorded with its final verdict, risk score, and triggered reasons. Easily query paginated stats via the Audit API.
+- 🛡️ **Robust Error Handling:** A global `@RestControllerAdvice` ensures all API errors (e.g., validation failures, 404s, 409 Conflicts) return a strict, predictable JSON structure.
+- 🛠 **Automated Generation:** Integrated synthetic transaction producer for immediate load testing.
+- 🎯 **Risk Scoring:** Numeric risk score aggregation across all rules — provides granular risk assessment beyond binary verdicts.
+- ✅ **Strict Validation:** ISO 4217 currency format enforcement and comprehensive input validation before rule evaluation.
 
 ---
 
@@ -51,15 +54,17 @@ graph TB
         R4 -.-> R5["Geo Velocity Rule"]
         
         R5 --> RP["Verdict Producer"]
+        R5 --> AS["Audit Service"]
     end
 
     subgraph "Data Storage"
         Redis[("Redis<br/>(Velocity & TTL)")]
-        PG[("PostgreSQL<br/>(Config & Blacklist)")]
+        PG[("PostgreSQL<br/>(Config, Tags & Audit)")]
     end
 
     RE <--> Redis
     RE <--> PG
+    AS --> PG
 
     RP -->|APPROVED / DECLINED| KOut["Kafka: transactions-verdicted"]
 ```
@@ -99,18 +104,12 @@ Each rule contributes a numeric `riskScore` to the total. The `totalRiskScore` i
 - Docker & Docker Compose
 - Maven (or use the included `./mvnw` wrapper)
 
-### 2. Launch Infrastructure
-Start all necessary dependency services (Kafka, Zookeeper, Redis, PostgreSQL, Prometheus, Grafana) with a single command:
+### 2. Launch Infrastructure & App
+Start the database, Redis, Kafka, Prometheus, Grafana, and the application itself using the multi-stage Docker build:
 ```bash
-docker-compose up -d
+docker-compose up --build -d
 ```
-
-### 3. Run the Core Application
-The application automatically applies database migrations using Flyway on startup.
-```bash
-# Wait a few seconds for Kafka & DB to initialize
-./mvnw spring-boot:run
-```
+*Note: The application container will intelligently wait for PostgreSQL and Kafka health checks to pass before starting.*
 
 ---
 
@@ -125,6 +124,12 @@ Generate synthetic transaction data directly via cURL to observe the engine's be
 curl -X POST "http://localhost:8080/api/v1/producer/generate?count=1000"
 ```
 
+### 📊 Querying the Audit Log
+The `AuditService` powers a comprehensive REST API to view fraud statistics derived from stream aggregations and JPQL:
+```bash
+curl "http://localhost:8080/api/v1/audit/stats/last-24h"
+```
+
 ### 📈 Monitoring Metrics
 Observe system metrics in real-time through Grafana:
 - 🌐 URL: `http://localhost:3000`
@@ -134,7 +139,7 @@ Observe system metrics in real-time through Grafana:
 ---
 
 ## 🧪 Testing
-The project includes an extensive suite of 40+ unit tests using JUnit 5 and Mockito. To execute:
+The project includes an extensive suite of 60+ unit tests using JUnit 5 and Mockito. This includes rigorous `@ParameterizedTest` suites with `@MethodSource` and `@CsvSource` for boundary-value checking, and Mockito `@Spy` assertions. To execute:
 ```bash
 ./mvnw test
 ```
