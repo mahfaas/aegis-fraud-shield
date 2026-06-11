@@ -49,6 +49,9 @@ fraud:
       enabled: false   # set to true to activate MerchantCategoryRule
     geo-velocity:
       enabled: true    # set to false to disable GeoVelocityRule (e.g. if Redis is unavailable)
+    risk-score:
+      soft-threshold: 60   # accumulated score >= soft → escalate APPROVED to MANUAL_REVIEW
+      hard-threshold: 90   # accumulated score >= hard → always DECLINED
 
   kafka:
     topic-in: transactions-raw

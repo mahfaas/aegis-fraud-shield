@@ -1,5 +1,6 @@
 package io.github.mahfaas.fraudshield.engine;
 
+import io.github.mahfaas.fraudshield.engine.rules.RuleContext;
 import io.github.mahfaas.fraudshield.metrics.FraudMetrics;
 import io.github.mahfaas.fraudshield.model.Transaction;
 import io.github.mahfaas.fraudshield.model.Verdict;
@@ -61,27 +62,37 @@ public class RuleEngine {
         Verdict finalVerdict = Verdict.APPROVED;
         int totalRiskScore = 0;
 
-        for (Rule rule : rules) {
-            RuleResult result = rule.evaluate(transaction);
-            totalRiskScore += result.getRiskScore();
+        try {
+            for (Rule rule : rules) {
+                // Populate RuleContext before every rule invocation so that
+                // RiskScoreThresholdRule (order=50) can read the running totals.
+                RuleContext.set(totalRiskScore, finalVerdict);
 
-            if (result.isTriggered()) {
-                metrics.recordRuleTriggered(rule.getName());
-                reasons.add("[" + rule.getName() + "] " + result.getReason());
-            }
+                RuleResult result = rule.evaluate(transaction);
+                totalRiskScore += result.getRiskScore();
 
-            if (result.getVerdict() == Verdict.DECLINED) {
-                log.info("Transaction {} DECLINED by rule [{}]: {}",
-                        transaction.getTransactionId(), rule.getName(), result.getReason());
-                finalVerdict = Verdict.DECLINED;
-                break;
-            }
+                if (result.isTriggered()) {
+                    metrics.recordRuleTriggered(rule.getName());
+                    reasons.add("[" + rule.getName() + "] " + result.getReason());
+                }
 
-            if (result.getVerdict() == Verdict.MANUAL_REVIEW) {
-                log.info("Transaction {} flagged for MANUAL_REVIEW by rule [{}]: {}",
-                        transaction.getTransactionId(), rule.getName(), result.getReason());
-                finalVerdict = Verdict.MANUAL_REVIEW;
+                if (result.getVerdict() == Verdict.DECLINED) {
+                    log.info("Transaction {} DECLINED by rule [{}]: {}",
+                            transaction.getTransactionId(), rule.getName(), result.getReason());
+                    finalVerdict = Verdict.DECLINED;
+                    break;
+                }
+
+                if (result.getVerdict() == Verdict.MANUAL_REVIEW) {
+                    log.info("Transaction {} flagged for MANUAL_REVIEW by rule [{}]: {}",
+                            transaction.getTransactionId(), rule.getName(), result.getReason());
+                    finalVerdict = Verdict.MANUAL_REVIEW;
+                }
             }
+        } finally {
+            // Always clear the thread-local to prevent context leakage
+            // between Kafka consumer thread invocations.
+            RuleContext.clear();
         }
 
         return VerdictedTransaction.builder()
