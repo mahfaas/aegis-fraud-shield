@@ -1,6 +1,7 @@
 package io.github.mahfaas.fraudshield.api;
 
 import io.github.mahfaas.fraudshield.audit.AuditLogSummary;
+import io.github.mahfaas.fraudshield.audit.AuditSearchRequest;
 import io.github.mahfaas.fraudshield.audit.AuditService;
 import io.github.mahfaas.fraudshield.model.Verdict;
 import io.swagger.v3.oas.annotations.Operation;
@@ -66,6 +67,21 @@ public class AuditController {
 
         int safeSize = Math.min(size, 100);
         return auditService.getPageByVerdict(verdict, page, safeSize);
+    }
+
+    /**
+     * Executes a dynamic search using query parameters mapped to {@link AuditSearchRequest}.
+     * All parameters are optional. Example:
+     * {@code GET /api/v1/audit/search?verdict=DECLINED&startDate=2026-06-01T00:00:00Z}
+     */
+    @GetMapping("/search")
+    @Operation(summary = "Search audit log", description = "Multi-field dynamic search. All params are optional.")
+    public PagedResponse<AuditLogSummary> search(
+            @ModelAttribute AuditSearchRequest searchRequest,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+
+        return auditService.search(searchRequest, page, Math.min(size, 100));
     }
 
     /**

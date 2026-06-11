@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -162,6 +163,23 @@ public class AuditService {
 
         return io.github.mahfaas.fraudshield.api.PagedResponse.of(
                 summaries, page, size, entityPage.getTotalElements());
+    }
+
+    /**
+     * Executes a dynamic search using Spring Data JPA Specifications.
+     * Maps the resulting entities to summary DTOs.
+     */
+    @Transactional(readOnly = true)
+    public io.github.mahfaas.fraudshield.api.PagedResponse<AuditLogSummary> search(AuditSearchRequest request, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "processedAt"));
+        Specification<AuditLogEntity> spec = AuditLogSpecification.fromRequest(request);
+
+        Page<AuditLogEntity> result = repository.findAll(spec, pageable);
+
+        return io.github.mahfaas.fraudshield.api.PagedResponse.of(
+                result.getContent().stream().map(TO_SUMMARY).collect(Collectors.toList()),
+                page, size, result.getTotalElements()
+        );
     }
 
     // ── Read: stats ──────────────────────────────────────────────────────────
