@@ -47,6 +47,17 @@ fraud:
       window-seconds: 60
     merchant-category:
       enabled: false   # set to true to activate MerchantCategoryRule
+    time-window:
+      enabled: true
+      high-risk-start-hour: 2     # 2 AM UTC (inclusive)
+      high-risk-end-hour: 5       # 5 AM UTC (exclusive)
+      flag-weekends: true
+      high-risk-categories:
+        - gambling
+        - crypto
+        - wire-transfer
+        - adult
+        - forex
     geo-velocity:
       enabled: true    # set to false to disable GeoVelocityRule (e.g. if Redis is unavailable)
     risk-score:
