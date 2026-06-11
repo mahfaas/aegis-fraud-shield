@@ -1,9 +1,11 @@
 package io.github.mahfaas.fraudshield.audit;
 
+import io.github.mahfaas.fraudshield.cases.FraudCaseService;
 import io.github.mahfaas.fraudshield.model.Verdict;
 import io.github.mahfaas.fraudshield.model.VerdictedTransaction;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -34,10 +36,20 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class AuditService {
 
     private final AuditLogRepository repository;
+    private final FraudCaseService fraudCaseService;
+
+    /**
+     * @param fraudCaseService injected lazily to avoid any potential
+     *                         circular dependency through the Spring context.
+     */
+    public AuditService(AuditLogRepository repository,
+                        @Lazy FraudCaseService fraudCaseService) {
+        this.repository = repository;
+        this.fraudCaseService = fraudCaseService;
+    }
 
     // ── Reusable Predicates ──────────────────────────────────────────────────
 
@@ -90,6 +102,13 @@ public class AuditService {
         AuditLogEntity saved = repository.save(entry);
         log.debug("Audit entry saved: id={}, txId={}, verdict={}",
                 saved.getId(), saved.getTransactionId(), saved.getVerdict());
+
+        // Auto-create a fraud case for every MANUAL_REVIEW verdict.
+        // The call is idempotent — duplicate messages are silently ignored.
+        if (verdictedTransaction.getVerdict() == Verdict.MANUAL_REVIEW) {
+            fraudCaseService.createFromVerdict(verdictedTransaction);
+        }
+
         return saved;
     }
 

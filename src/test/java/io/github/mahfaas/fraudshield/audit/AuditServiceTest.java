@@ -1,6 +1,8 @@
 package io.github.mahfaas.fraudshield.audit;
 
 import io.github.mahfaas.fraudshield.api.PagedResponse;
+import io.github.mahfaas.fraudshield.cases.FraudCase;
+import io.github.mahfaas.fraudshield.cases.FraudCaseService;
 import io.github.mahfaas.fraudshield.model.Transaction;
 import io.github.mahfaas.fraudshield.model.Verdict;
 import io.github.mahfaas.fraudshield.model.VerdictedTransaction;
@@ -45,11 +47,18 @@ class AuditServiceTest {
     @Mock
     private AuditLogRepository repository;
 
+    @Mock
+    private FraudCaseService fraudCaseService;
+
     private AuditService auditService;
 
     @BeforeEach
     void setUp() {
-        auditService = new AuditService(repository);
+        // lenient: createFromVerdict is only called by tests that produce MANUAL_REVIEW verdicts.
+        // Tests covering other code paths (getPage, getVerdictStats) don't invoke it,
+        // so we use lenient() to suppress UnnecessaryStubbingException.
+        lenient().when(fraudCaseService.createFromVerdict(any())).thenReturn(new FraudCase());
+        auditService = new AuditService(repository, fraudCaseService);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
