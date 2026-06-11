@@ -38,6 +38,11 @@ spring:
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 fraud:
+  api:
+    rate-limit:
+      enabled: true
+      max-requests: 100
+      window-seconds: 60
   rules:
     amount:
       decline-threshold: 500000
