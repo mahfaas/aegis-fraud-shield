@@ -4,7 +4,7 @@
   <p><strong>Enterprise-Grade Real-Time Fraud Detection Engine</strong></p>
   
   <p>
-    <img src="https://img.shields.io/badge/Java-21-orange.svg" alt="Java 21" />
+    <img src="https://img.shields.io/badge/Java-24-orange.svg" alt="Java 24" />
     <img src="https://img.shields.io/badge/Spring%20Boot-3.4.4-brightgreen.svg" alt="Spring Boot" />
     <img src="https://img.shields.io/badge/Kafka-Event%20Streaming-black.svg" alt="Kafka" />
     <img src="https://img.shields.io/badge/Redis-Caching-red.svg" alt="Redis" />
@@ -100,7 +100,7 @@ Each rule contributes a numeric `riskScore` to the total. The `totalRiskScore` i
 ## 🚀 Getting Started
 
 ### 1. Prerequisites
-- Java 21 or higher
+- Java 24 or higher
 - Docker & Docker Compose
 - Maven (or use the included `./mvnw` wrapper)
 
