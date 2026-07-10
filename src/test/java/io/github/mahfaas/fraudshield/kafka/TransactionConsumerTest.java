@@ -1,5 +1,7 @@
 package io.github.mahfaas.fraudshield.kafka;
 
+import io.github.mahfaas.fraudshield.alert.AlertService;
+import io.github.mahfaas.fraudshield.audit.AuditService;
 import io.github.mahfaas.fraudshield.engine.RuleEngine;
 import io.github.mahfaas.fraudshield.metrics.FraudMetrics;
 import io.github.mahfaas.fraudshield.model.Transaction;
@@ -32,6 +34,8 @@ class TransactionConsumerTest {
     @Mock private VerdictProducer verdictProducer;
     @Mock private FraudMetrics metrics;
     @Mock private IdempotencyService idempotencyService;
+    @Mock private AuditService auditService;
+    @Mock private AlertService alertService;
 
     @InjectMocks
     private TransactionConsumer consumer;
@@ -73,6 +77,8 @@ class TransactionConsumerTest {
         verify(ruleEngine).evaluate(tx);
         verify(verdictProducer).send(verdict);
         verify(verdictProducer, never()).sendToDlq(anyString(), anyString());
+        verify(auditService).record(verdict);
+        verify(alertService).notify(verdict);
     }
 
     @Test
@@ -86,6 +92,7 @@ class TransactionConsumerTest {
         verify(verdictProducer).sendToDlq(anyString(), anyString());
         verify(ruleEngine, never()).evaluate(any());
         verify(verdictProducer, never()).send(any());
+        verify(alertService, never()).notify(any());
     }
 
     @Test

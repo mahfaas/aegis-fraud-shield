@@ -69,6 +69,11 @@ fraud:
       soft-threshold: 60   # accumulated score >= soft → escalate APPROVED to MANUAL_REVIEW
       hard-threshold: 90   # accumulated score >= hard → always DECLINED
 
+  alerts:
+    enabled: false          # set to true and configure webhook-url to enable
+    webhook-url: ""
+    timeout-ms: 3000
+
   kafka:
     topic-in: transactions-raw
     topic-out: transactions-verdicted
