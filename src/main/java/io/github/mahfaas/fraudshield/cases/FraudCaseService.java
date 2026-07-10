@@ -47,6 +47,7 @@ import java.util.stream.Collectors;
 public class FraudCaseService {
 
     private final FraudCaseRepository repository;
+    private final FraudCaseNoteRepository noteRepository;
 
     // ── Case creation ─────────────────────────────────────────────────────────
 
@@ -175,6 +176,51 @@ public class FraudCaseService {
                         (a, b) -> a,
                         () -> new EnumMap<>(FraudCaseStatus.class)
                 ));
+    }
+
+    // ── Notes / history log ──────────────────────────────────────────────────
+
+    /**
+     * Appends a note to a case's investigation history.
+     *
+     * <p>Unlike {@code analystNotes} on {@link FraudCase} (overwritten on every
+     * status update), notes recorded here accumulate — giving a full audit
+     * trail independent of status transitions.
+     *
+     * @param caseId the case database ID
+     * @param author optional free-text identifier of who wrote the note (no auth system exists)
+     * @param note   the note content
+     * @return the persisted note
+     * @throws FraudCaseNotFoundException if the case does not exist
+     */
+    @Transactional
+    public FraudCaseNote addNote(Long caseId, String author, String note) {
+        FraudCase fraudCase = repository.findById(caseId)
+                .orElseThrow(() -> new FraudCaseNotFoundException(caseId));
+
+        FraudCaseNote fraudCaseNote = FraudCaseNote.builder()
+                .fraudCase(fraudCase)
+                .author(author)
+                .note(note)
+                .build();
+
+        FraudCaseNote saved = noteRepository.save(fraudCaseNote);
+        log.info("Note added to FraudCase {}: author={}", caseId, author);
+        return saved;
+    }
+
+    /**
+     * Returns all notes for a case, newest first.
+     *
+     * @param caseId the case database ID
+     * @throws FraudCaseNotFoundException if the case does not exist
+     */
+    @Transactional(readOnly = true)
+    public List<FraudCaseNote> getNotes(Long caseId) {
+        if (!repository.existsById(caseId)) {
+            throw new FraudCaseNotFoundException(caseId);
+        }
+        return noteRepository.findByFraudCaseIdOrderByCreatedAtDesc(caseId);
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

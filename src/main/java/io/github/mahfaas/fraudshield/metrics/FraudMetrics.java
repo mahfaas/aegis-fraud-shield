@@ -37,6 +37,8 @@ public class FraudMetrics {
     private final Counter transactionsManualReview;
     private final Counter transactionsDlq;
     private final Counter ruleTriggered;
+    private final Counter alertsSent;
+    private final Counter alertsFailed;
     private final Timer processingTime;
     private final MeterRegistry registry;
 
@@ -76,6 +78,14 @@ public class FraudMetrics {
         this.ruleTriggered = Counter.builder("fraud.rules.triggered")
                 .tag("rule", "ALL")
                 .description("Aggregate rule triggers (decline or manual review)")
+                .register(registry);
+
+        this.alertsSent = Counter.builder("fraud.alerts.sent")
+                .description("Webhook alerts successfully sent for DECLINED/MANUAL_REVIEW verdicts")
+                .register(registry);
+
+        this.alertsFailed = Counter.builder("fraud.alerts.failed")
+                .description("Webhook alerts that failed to send")
                 .register(registry);
 
         this.processingTime = Timer.builder("fraud.processing.time")
@@ -125,6 +135,16 @@ public class FraudMetrics {
                                 .description("Rule triggers for rule: " + name)
                                 .register(registry))
                 .increment();
+    }
+
+    /** Increments the counter for successfully sent webhook alerts. */
+    public void recordAlertSent() {
+        alertsSent.increment();
+    }
+
+    /** Increments the counter for webhook alerts that failed to send. */
+    public void recordAlertFailed() {
+        alertsFailed.increment();
     }
 
     public Timer.Sample startTimer() {

@@ -15,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.List;
@@ -264,7 +266,57 @@ public class AuditService {
         );
     }
 
-    // ── Stats record ─────────────────────────────────────────────────────────
+    /**
+     * Returns a per-day verdict breakdown for the last {@code days} days (inclusive of today).
+     *
+     * <p>Backed by a single native SQL query ({@link AuditLogRepository#dailyVerdictBreakdown})
+     * that pre-pivots verdict counts per day using Postgres {@code FILTER (WHERE ...)}, so no
+     * further grouping is needed here — just row-to-DTO mapping.
+     *
+     * @param days lookback window in days
+     * @return one {@link DailyVerdictStats} entry per day that had activity, oldest first
+     */
+    @Transactional(readOnly = true)
+    public List<DailyVerdictStats> getDailyVerdictBreakdown(int days) {
+        Instant since = Instant.now().minus(days, ChronoUnit.DAYS);
+        List<Object[]> rows = repository.dailyVerdictBreakdown(since);
+
+        List<DailyVerdictStats> result = new ArrayList<>(rows.size());
+        for (Object[] row : rows) {
+            result.add(new DailyVerdictStats(
+                    ((java.sql.Date) row[0]).toLocalDate(),
+                    ((Number) row[1]).longValue(),
+                    ((Number) row[2]).longValue(),
+                    ((Number) row[3]).longValue()
+            ));
+        }
+        return result;
+    }
+
+    /**
+     * Returns the top accounts by DECLINED count/amount over the last {@code days} days.
+     *
+     * @param days  lookback window in days
+     * @param limit maximum number of accounts to return
+     * @return accounts ordered by declined amount, highest first
+     */
+    @Transactional(readOnly = true)
+    public List<AccountRiskSummary> getTopDecliningAccounts(int days, int limit) {
+        Instant since = Instant.now().minus(days, ChronoUnit.DAYS);
+        List<Object[]> rows = repository.topDecliningAccounts(since, limit);
+
+        List<AccountRiskSummary> result = new ArrayList<>(rows.size());
+        for (Object[] row : rows) {
+            result.add(new AccountRiskSummary(
+                    (String) row[0],
+                    ((Number) row[1]).longValue(),
+                    (BigDecimal) row[2]
+            ));
+        }
+        return result;
+    }
+
+    // ── Stats records ────────────────────────────────────────────────────────
 
     /**
      * Immutable stats snapshot for the last 24-hour window.
@@ -278,5 +330,24 @@ public class AuditService {
             BigDecimal declinedAmount,
             List<String> topTriggeredRules,
             Instant windowStart
+    ) {}
+
+    /**
+     * Verdict counts for a single calendar day, used by the daily trend endpoint.
+     */
+    public record DailyVerdictStats(
+            LocalDate date,
+            long approved,
+            long declined,
+            long manualReview
+    ) {}
+
+    /**
+     * Decline exposure for a single account, used by the top-accounts endpoint.
+     */
+    public record AccountRiskSummary(
+            String accountId,
+            long declineCount,
+            BigDecimal declineAmount
     ) {}
 }

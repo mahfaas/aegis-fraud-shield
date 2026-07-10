@@ -42,11 +42,14 @@ class FraudCaseServiceTest {
     @Mock
     private FraudCaseRepository repository;
 
+    @Mock
+    private FraudCaseNoteRepository noteRepository;
+
     private FraudCaseService service;
 
     @BeforeEach
     void setUp() {
-        service = new FraudCaseService(repository);
+        service = new FraudCaseService(repository, noteRepository);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -284,5 +287,62 @@ class FraudCaseServiceTest {
         when(repository.countByStatus()).thenReturn(List.of());
 
         assertTrue(service.getStatusCounts().isEmpty());
+    }
+
+    // ── addNote() / getNotes() — history log ─────────────────────────────────
+
+    @Nested
+    @DisplayName("addNote() / getNotes() — history log")
+    class Notes {
+
+        @Test
+        @DisplayName("addNote() persists a note linked to the case")
+        void addNotePersistsNote() {
+            FraudCase c = buildCase(1L, FraudCaseStatus.INVESTIGATING);
+            when(repository.findById(1L)).thenReturn(Optional.of(c));
+
+            ArgumentCaptor<FraudCaseNote> captor = ArgumentCaptor.forClass(FraudCaseNote.class);
+            when(noteRepository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+            FraudCaseNote result = service.addNote(1L, "analyst-1", "Checked device fingerprint, looks suspicious");
+
+            FraudCaseNote captured = captor.getValue();
+            assertSame(c, captured.getFraudCase());
+            assertEquals("analyst-1", captured.getAuthor());
+            assertEquals("Checked device fingerprint, looks suspicious", captured.getNote());
+            assertSame(captured, result);
+        }
+
+        @Test
+        @DisplayName("addNote() throws FraudCaseNotFoundException when the case does not exist")
+        void addNoteThrowsWhenMissing() {
+            when(repository.findById(99L)).thenReturn(Optional.empty());
+
+            assertThrows(FraudCaseNotFoundException.class,
+                    () -> service.addNote(99L, "analyst-1", "note"));
+            verify(noteRepository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("getNotes() returns notes newest first")
+        void getNotesReturnsNotes() {
+            when(repository.existsById(1L)).thenReturn(true);
+            FraudCaseNote n1 = FraudCaseNote.builder().id(1L).author("analyst-1").note("first").build();
+            FraudCaseNote n2 = FraudCaseNote.builder().id(2L).author("analyst-2").note("second").build();
+            when(noteRepository.findByFraudCaseIdOrderByCreatedAtDesc(1L)).thenReturn(List.of(n2, n1));
+
+            List<FraudCaseNote> result = service.getNotes(1L);
+
+            assertEquals(2, result.size());
+            assertEquals("second", result.get(0).getNote());
+        }
+
+        @Test
+        @DisplayName("getNotes() throws FraudCaseNotFoundException when the case does not exist")
+        void getNotesThrowsWhenMissing() {
+            when(repository.existsById(99L)).thenReturn(false);
+
+            assertThrows(FraudCaseNotFoundException.class, () -> service.getNotes(99L));
+        }
     }
 }

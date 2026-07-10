@@ -1,6 +1,7 @@
 package io.github.mahfaas.fraudshield.api;
 
 import io.github.mahfaas.fraudshield.cases.FraudCase;
+import io.github.mahfaas.fraudshield.cases.FraudCaseNote;
 import io.github.mahfaas.fraudshield.cases.FraudCaseNotFoundException;
 import io.github.mahfaas.fraudshield.cases.FraudCaseService;
 import io.github.mahfaas.fraudshield.cases.FraudCaseStatus;
@@ -221,6 +222,80 @@ class FraudCaseControllerTest {
             mockMvc.perform(put("/api/v1/cases/99/status")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(body))
+                    .andExpect(status().isNotFound());
+        }
+    }
+
+    // ── POST /api/v1/cases/{id}/notes ─────────────────────────────────────────
+
+    @Nested
+    @DisplayName("POST /api/v1/cases/{id}/notes — add note")
+    class AddNote {
+
+        @Test
+        @DisplayName("Returns 201 with the created note")
+        void returnsCreatedNote() throws Exception {
+            FraudCaseNote note = FraudCaseNote.builder()
+                    .id(1L).author("analyst-1").note("Looks suspicious")
+                    .createdAt(Instant.parse("2026-07-10T10:00:00Z"))
+                    .build();
+            when(fraudCaseService.addNote(eq(1L), eq("analyst-1"), eq("Looks suspicious")))
+                    .thenReturn(note);
+
+            String body = """
+                    {"author":"analyst-1","note":"Looks suspicious"}
+                    """;
+
+            mockMvc.perform(post("/api/v1/cases/1/notes")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.author").value("analyst-1"))
+                    .andExpect(jsonPath("$.note").value("Looks suspicious"));
+        }
+
+        @Test
+        @DisplayName("Returns 404 when case not found")
+        void returns404ForUnknownCase() throws Exception {
+            when(fraudCaseService.addNote(eq(99L), any(), any()))
+                    .thenThrow(new FraudCaseNotFoundException(99L));
+
+            String body = """
+                    {"author":"analyst-1","note":"note"}
+                    """;
+
+            mockMvc.perform(post("/api/v1/cases/99/notes")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isNotFound());
+        }
+    }
+
+    // ── GET /api/v1/cases/{id}/notes ──────────────────────────────────────────
+
+    @Nested
+    @DisplayName("GET /api/v1/cases/{id}/notes — list notes")
+    class GetNotes {
+
+        @Test
+        @DisplayName("Returns 200 with the note history")
+        void returnsNoteHistory() throws Exception {
+            FraudCaseNote n1 = FraudCaseNote.builder().id(1L).author("analyst-1").note("first").build();
+            FraudCaseNote n2 = FraudCaseNote.builder().id(2L).author("analyst-2").note("second").build();
+            when(fraudCaseService.getNotes(1L)).thenReturn(List.of(n2, n1));
+
+            mockMvc.perform(get("/api/v1/cases/1/notes"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].note").value("second"))
+                    .andExpect(jsonPath("$[1].note").value("first"));
+        }
+
+        @Test
+        @DisplayName("Returns 404 when case not found")
+        void returns404ForUnknownCase() throws Exception {
+            when(fraudCaseService.getNotes(99L)).thenThrow(new FraudCaseNotFoundException(99L));
+
+            mockMvc.perform(get("/api/v1/cases/99/notes"))
                     .andExpect(status().isNotFound());
         }
     }

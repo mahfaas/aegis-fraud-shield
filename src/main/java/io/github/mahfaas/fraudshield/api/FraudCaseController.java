@@ -1,6 +1,7 @@
 package io.github.mahfaas.fraudshield.api;
 
 import io.github.mahfaas.fraudshield.cases.FraudCase;
+import io.github.mahfaas.fraudshield.cases.FraudCaseNote;
 import io.github.mahfaas.fraudshield.cases.FraudCaseService;
 import io.github.mahfaas.fraudshield.cases.FraudCaseStatus;
 import io.swagger.v3.oas.annotations.Operation;
@@ -10,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -112,6 +114,34 @@ public class FraudCaseController {
         return fraudCaseService.updateStatus(id, request.status(), request.analystNote());
     }
 
+    // ── Notes / history log ──────────────────────────────────────────────────
+
+    @PostMapping("/{id}/notes")
+    @ResponseStatus(HttpStatus.CREATED)
+    @Operation(
+            summary = "Add a note to a case",
+            description = "Appends a note to the case's investigation history. Unlike the analystNote " +
+                          "on the status-update endpoint (which is overwritten each time), notes here " +
+                          "accumulate into a full history log."
+    )
+    public FraudCaseNote addNote(
+            @Parameter(description = "Case database ID") @PathVariable Long id,
+            @RequestBody AddNoteRequest request) {
+
+        return fraudCaseService.addNote(id, request.author(), request.note());
+    }
+
+    @GetMapping("/{id}/notes")
+    @Operation(
+            summary = "List notes for a case",
+            description = "Returns the full note history for a case, newest first."
+    )
+    public List<FraudCaseNote> getNotes(
+            @Parameter(description = "Case database ID") @PathVariable Long id) {
+
+        return fraudCaseService.getNotes(id);
+    }
+
     // ── Request / Response DTOs ───────────────────────────────────────────────
 
     /**
@@ -122,4 +152,12 @@ public class FraudCaseController {
      */
     @ResponseStatus(HttpStatus.OK)
     public record StatusUpdateRequest(FraudCaseStatus status, String analystNote) {}
+
+    /**
+     * Request body for adding a note to a case's history log.
+     *
+     * @param author optional free-text identifier of who wrote the note (no auth system exists)
+     * @param note   the note content
+     */
+    public record AddNoteRequest(String author, String note) {}
 }

@@ -234,4 +234,63 @@ class AuditServiceTest {
         assertEquals(Verdict.MANUAL_REVIEW,   summary.verdict());
         assertEquals(2,                       summary.reasons().size(), "Reasons should be split by '|'");
     }
+
+    // ── getDailyVerdictBreakdown() — native query row mapping ──────────────
+
+    @Test
+    @DisplayName("getDailyVerdictBreakdown() maps native query rows to DailyVerdictStats")
+    void getDailyVerdictBreakdownMapsRows() {
+        List<Object[]> mockRows = List.of(
+                new Object[]{java.sql.Date.valueOf("2026-07-08"), 100L, 20L, 5L},
+                new Object[]{java.sql.Date.valueOf("2026-07-09"), 90L, 15L, 8L}
+        );
+        when(repository.dailyVerdictBreakdown(any())).thenReturn(mockRows);
+
+        List<AuditService.DailyVerdictStats> stats = auditService.getDailyVerdictBreakdown(7);
+
+        assertEquals(2, stats.size());
+        assertEquals(java.time.LocalDate.parse("2026-07-08"), stats.get(0).date());
+        assertEquals(100L, stats.get(0).approved());
+        assertEquals(20L,  stats.get(0).declined());
+        assertEquals(5L,   stats.get(0).manualReview());
+    }
+
+    @Test
+    @DisplayName("getDailyVerdictBreakdown() returns empty list when no data in window")
+    void getDailyVerdictBreakdownEmptyWhenNoData() {
+        when(repository.dailyVerdictBreakdown(any())).thenReturn(List.of());
+
+        List<AuditService.DailyVerdictStats> stats = auditService.getDailyVerdictBreakdown(7);
+
+        assertTrue(stats.isEmpty());
+    }
+
+    // ── getTopDecliningAccounts() — native query row mapping ───────────────
+
+    @Test
+    @DisplayName("getTopDecliningAccounts() maps native query rows to AccountRiskSummary")
+    void getTopDecliningAccountsMapsRows() {
+        List<Object[]> mockRows = List.of(
+                new Object[]{"ACC-777", 12L, BigDecimal.valueOf(950_000)},
+                new Object[]{"ACC-042", 5L,  BigDecimal.valueOf(200_000)}
+        );
+        when(repository.topDecliningAccounts(any(), eq(10))).thenReturn(mockRows);
+
+        List<AuditService.AccountRiskSummary> stats = auditService.getTopDecliningAccounts(30, 10);
+
+        assertEquals(2, stats.size());
+        assertEquals("ACC-777",                     stats.get(0).accountId());
+        assertEquals(12L,                            stats.get(0).declineCount());
+        assertEquals(BigDecimal.valueOf(950_000),    stats.get(0).declineAmount());
+    }
+
+    @Test
+    @DisplayName("getTopDecliningAccounts() returns empty list when no declines in window")
+    void getTopDecliningAccountsEmptyWhenNoData() {
+        when(repository.topDecliningAccounts(any(), eq(5))).thenReturn(List.of());
+
+        List<AuditService.AccountRiskSummary> stats = auditService.getTopDecliningAccounts(30, 5);
+
+        assertTrue(stats.isEmpty());
+    }
 }

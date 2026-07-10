@@ -65,4 +65,42 @@ public interface AuditLogRepository extends JpaRepository<AuditLogEntity, Long>,
     @Query("SELECT SUM(a.amount) FROM AuditLogEntity a " +
            "WHERE a.verdict = 'DECLINED' AND a.processedAt > :since")
     java.math.BigDecimal sumDeclinedAmountSince(@Param("since") Instant since);
+
+    /**
+     * Returns a per-day verdict breakdown since the given instant, one row per day.
+     *
+     * <p>Native SQL is used (rather than JPQL) so that {@code date_trunc} and the
+     * Postgres {@code FILTER (WHERE ...)} clause can pre-pivot verdict counts into
+     * columns, avoiding a second grouping pass in Java.
+     *
+     * @return list of {@code [day (java.sql.Date), approved, declined, manualReview]} rows
+     */
+    @Query(value = """
+            SELECT date_trunc('day', processed_at)::date AS day,
+                   COUNT(*) FILTER (WHERE verdict = 'APPROVED')      AS approved,
+                   COUNT(*) FILTER (WHERE verdict = 'DECLINED')      AS declined,
+                   COUNT(*) FILTER (WHERE verdict = 'MANUAL_REVIEW') AS manual_review
+            FROM audit_log
+            WHERE processed_at > :since
+            GROUP BY day
+            ORDER BY day
+            """, nativeQuery = true)
+    List<Object[]> dailyVerdictBreakdown(@Param("since") Instant since);
+
+    /**
+     * Returns the top accounts by DECLINED count/amount since the given instant.
+     *
+     * @return list of {@code [accountId, declineCount, declineAmount]} rows, highest amount first
+     */
+    @Query(value = """
+            SELECT account_id,
+                   COUNT(*)                    AS decline_count,
+                   COALESCE(SUM(amount), 0)    AS decline_amount
+            FROM audit_log
+            WHERE verdict = 'DECLINED' AND processed_at > :since
+            GROUP BY account_id
+            ORDER BY decline_amount DESC
+            LIMIT :limit
+            """, nativeQuery = true)
+    List<Object[]> topDecliningAccounts(@Param("since") Instant since, @Param("limit") int limit);
 }

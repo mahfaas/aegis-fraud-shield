@@ -115,4 +115,38 @@ public class AuditController {
     public AuditService.AuditStats getLast24hStats() {
         return auditService.getLast24hStats();
     }
+
+    /**
+     * Returns a per-day verdict breakdown for the last {@code days} days.
+     *
+     * @param days lookback window in days (default 7)
+     */
+    @GetMapping("/stats/daily")
+    @Operation(
+            summary = "Daily verdict trend",
+            description = "Returns one row per day with APPROVED/DECLINED/MANUAL_REVIEW counts, " +
+                          "sourced from a native SQL query using date_trunc and FILTER (WHERE ...)."
+    )
+    public java.util.List<AuditService.DailyVerdictStats> getDailyStats(
+            @Parameter(description = "Lookback window in days") @RequestParam(defaultValue = "7") int days) {
+        return auditService.getDailyVerdictBreakdown(days);
+    }
+
+    /**
+     * Returns the top accounts by DECLINED count/amount over the last {@code days} days.
+     *
+     * @param days  lookback window in days (default 30)
+     * @param limit maximum number of accounts to return (default 10, max 100)
+     */
+    @GetMapping("/stats/top-accounts")
+    @Operation(
+            summary = "Top declining accounts",
+            description = "Returns the accounts with the highest DECLINED exposure over the given window, " +
+                          "ordered by total declined amount."
+    )
+    public java.util.List<AuditService.AccountRiskSummary> getTopDecliningAccounts(
+            @Parameter(description = "Lookback window in days") @RequestParam(defaultValue = "30") int days,
+            @Parameter(description = "Max accounts to return") @RequestParam(defaultValue = "10") int limit) {
+        return auditService.getTopDecliningAccounts(days, Math.min(limit, 100));
+    }
 }
