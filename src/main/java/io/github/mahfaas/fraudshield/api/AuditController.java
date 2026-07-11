@@ -149,4 +149,22 @@ public class AuditController {
             @Parameter(description = "Max accounts to return") @RequestParam(defaultValue = "10") int limit) {
         return auditService.getTopDecliningAccounts(days, Math.min(limit, 100));
     }
+
+    /**
+     * Returns rule trigger frequency over the last {@code days} days, ordered by frequency descending.
+     *
+     * @param days  lookback window in days (default 7)
+     * @param limit maximum number of rules to return (default 10, max 100)
+     */
+    @GetMapping("/stats/rule-triggers")
+    @Operation(
+            summary = "Rule trigger frequency",
+            description = "Returns rule trigger counts over an arbitrary window, ordered by frequency descending. " +
+                          "Generalizes the top-5 list embedded in the last-24h snapshot to any window/limit."
+    )
+    public java.util.List<AuditService.RuleTriggerCount> getRuleTriggerFrequency(
+            @Parameter(description = "Lookback window in days") @RequestParam(defaultValue = "7") int days,
+            @Parameter(description = "Max rules to return") @RequestParam(defaultValue = "10") int limit) {
+        return auditService.getRuleTriggerFrequency(days, Math.min(limit, 100));
+    }
 }

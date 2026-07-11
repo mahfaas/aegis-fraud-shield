@@ -242,13 +242,7 @@ public class AuditService {
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
 
         // Collect unique rule names from reason strings using flatMap
-        List<String> topRules = recent.stream()
-                .filter(HAS_REASONS)
-                .flatMap(e -> Arrays.stream(e.getReasons().split("\\|")))
-                .map(reason -> reason.replaceAll("\\[(.+?)\\].*", "$1").trim())
-                .filter(Predicate.not(String::isBlank))
-                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()))
-                .entrySet().stream()
+        List<String> topRules = countTriggeredRules(recent).entrySet().stream()
                 .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
                 .limit(5)
                 .map(Map.Entry::getKey)
@@ -264,6 +258,43 @@ public class AuditService {
                 topRules,
                 since
         );
+    }
+
+    /**
+     * Returns rule trigger frequency over the last {@code days} days, ordered by frequency descending.
+     *
+     * <p>Generalizes the top-5 list embedded in {@link #getLast24hStats()} to an arbitrary
+     * window and limit, reusing the same {@link #countTriggeredRules} extraction logic.
+     *
+     * @param days  lookback window in days
+     * @param limit maximum number of rules to return
+     * @return rule name → trigger count, highest first
+     */
+    @Transactional(readOnly = true)
+    public List<RuleTriggerCount> getRuleTriggerFrequency(int days, int limit) {
+        Instant since = Instant.now().minus(days, ChronoUnit.DAYS);
+        PageRequest all = PageRequest.of(0, Integer.MAX_VALUE);
+        List<AuditLogEntity> recent = repository.findRecentEntries(since, all).getContent();
+
+        return countTriggeredRules(recent).entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .limit(limit)
+                .map(e -> new RuleTriggerCount(e.getKey(), e.getValue()))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Extracts triggered rule names from the pipe-delimited {@code reasons} column
+     * (e.g. {@code "[GEO_VELOCITY] impossible travel|[TIME_WINDOW] night transaction"})
+     * and counts occurrences per rule.
+     */
+    private static Map<String, Long> countTriggeredRules(List<AuditLogEntity> entries) {
+        return entries.stream()
+                .filter(HAS_REASONS)
+                .flatMap(e -> Arrays.stream(e.getReasons().split("\\|")))
+                .map(reason -> reason.replaceAll("\\[(.+?)\\].*", "$1").trim())
+                .filter(Predicate.not(String::isBlank))
+                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
     }
 
     /**
@@ -349,5 +380,13 @@ public class AuditService {
             String accountId,
             long declineCount,
             BigDecimal declineAmount
+    ) {}
+
+    /**
+     * Trigger count for a single rule, used by the rule-trigger-frequency endpoint.
+     */
+    public record RuleTriggerCount(
+            String ruleName,
+            long triggerCount
     ) {}
 }

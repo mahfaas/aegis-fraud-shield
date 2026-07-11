@@ -293,4 +293,52 @@ class AuditServiceTest {
 
         assertTrue(stats.isEmpty());
     }
+
+    // ── getRuleTriggerFrequency() — reason-string extraction + counting ────
+
+    @Test
+    @DisplayName("getRuleTriggerFrequency() counts rule names extracted from reasons, ordered by frequency")
+    void getRuleTriggerFrequencyCountsAndOrders() {
+        AuditLogEntity e1 = buildEntity(1L, "tx-001", Verdict.DECLINED, BigDecimal.valueOf(1000));
+        e1.setReasons("[BLACKLIST] blocked|[VELOCITY] too fast");
+        AuditLogEntity e2 = buildEntity(2L, "tx-002", Verdict.MANUAL_REVIEW, BigDecimal.valueOf(2000));
+        e2.setReasons("[VELOCITY] too fast");
+        AuditLogEntity e3 = buildEntity(3L, "tx-003", Verdict.APPROVED, BigDecimal.valueOf(500));
+        e3.setReasons(null); // no reasons — must be filtered out, not throw
+
+        when(repository.findRecentEntries(any(), any()))
+                .thenReturn(new PageImpl<>(List.of(e1, e2, e3)));
+
+        List<AuditService.RuleTriggerCount> result = auditService.getRuleTriggerFrequency(7, 10);
+
+        assertEquals(2, result.size());
+        assertEquals("VELOCITY",  result.get(0).ruleName());
+        assertEquals(2L,          result.get(0).triggerCount());
+        assertEquals("BLACKLIST", result.get(1).ruleName());
+        assertEquals(1L,          result.get(1).triggerCount());
+    }
+
+    @Test
+    @DisplayName("getRuleTriggerFrequency() truncates to the requested limit")
+    void getRuleTriggerFrequencyRespectsLimit() {
+        AuditLogEntity e1 = buildEntity(1L, "tx-001", Verdict.DECLINED, BigDecimal.valueOf(1000));
+        e1.setReasons("[BLACKLIST] blocked|[VELOCITY] too fast|[AMOUNT] exceeded");
+
+        when(repository.findRecentEntries(any(), any()))
+                .thenReturn(new PageImpl<>(List.of(e1)));
+
+        List<AuditService.RuleTriggerCount> result = auditService.getRuleTriggerFrequency(7, 2);
+
+        assertEquals(2, result.size());
+    }
+
+    @Test
+    @DisplayName("getRuleTriggerFrequency() returns empty list when no data in window")
+    void getRuleTriggerFrequencyEmptyWhenNoData() {
+        when(repository.findRecentEntries(any(), any())).thenReturn(new PageImpl<>(List.of()));
+
+        List<AuditService.RuleTriggerCount> result = auditService.getRuleTriggerFrequency(7, 10);
+
+        assertTrue(result.isEmpty());
+    }
 }
