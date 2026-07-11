@@ -80,6 +80,7 @@ graph TB
 | Velocity | Detects high-frequency spending patterns per account | 100 (DECLINED) | Redis | ✅ |
 | Geo-Velocity | Prevents "impossible travel" by evaluating country changes | 50 (MANUAL_REVIEW) | Redis | ✅ |
 | Merchant Category | Blocks or flags transactions by merchant category (gambling, crypto…) | 50 / 100 | PostgreSQL + Memory | ⚙️ opt-in |
+| IP Reputation | Flags known-risky IP ranges and geo-mismatches (IP's known country vs. declared country) | 50 / 100 | PostgreSQL + Memory | ⚙️ opt-in |
 
 Each rule contributes a numeric `riskScore` to the total. The `totalRiskScore` in the verdict response represents the aggregate risk level across all evaluated rules.
 
@@ -94,6 +95,19 @@ Each rule contributes a numeric `riskScore` to the total. The `totalRiskScore` i
 > Default blocked categories: `darkweb`, `illegal` → **DECLINED**  
 > Default review categories: `gambling`, `crypto`, `adult`, `firearms`, `wire_transfer` → **MANUAL_REVIEW**  
 > Both lists can be updated at runtime via `PUT /api/v1/rules/config/merchant-category/{decline|review}`.
+
+> **Enabling IP Reputation Rule**  
+> The rule is opt-in and costs zero resources when disabled. To activate, set the following property:  
+> ```yaml
+> fraud:
+>   rules:
+>     ip-reputation:
+>       enabled: true
+> ```
+> Matches a transaction's source IP against a curated `ip_reputation` table of known IP prefixes
+> (seeded with a few illustrative TOR-exit / datacenter ranges). A prefix with `riskScore = 100`
+> **DECLINES**; a prefix with `riskScore >= 50`, or any matched prefix whose known country differs
+> from the transaction's declared country, is sent to **MANUAL_REVIEW**.
 
 ---
 

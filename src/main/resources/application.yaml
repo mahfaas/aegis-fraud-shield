@@ -52,6 +52,8 @@ fraud:
       window-seconds: 60
     merchant-category:
       enabled: false   # set to true to activate MerchantCategoryRule
+    ip-reputation:
+      enabled: false   # set to true to activate IpReputationRule
     time-window:
       enabled: true
       high-risk-start-hour: 2     # 2 AM UTC (inclusive)
