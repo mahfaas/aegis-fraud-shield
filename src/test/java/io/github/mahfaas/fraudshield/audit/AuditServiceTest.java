@@ -341,4 +341,46 @@ class AuditServiceTest {
 
         assertTrue(result.isEmpty());
     }
+
+    // ── getAmountDistribution() — native query row mapping ─────────────────
+
+    @Test
+    @DisplayName("getAmountDistribution() maps a BigDecimal/Double-mixed native query row")
+    void getAmountDistributionMapsRow() {
+        // MIN/MAX/AVG come back as BigDecimal (NUMERIC column); percentile_cont as Double.
+        Object[] row = new Object[]{
+                42L,
+                BigDecimal.valueOf(100),
+                BigDecimal.valueOf(900_000),
+                BigDecimal.valueOf(45_000.5),
+                12_500.0,
+                780_000.0
+        };
+        when(repository.amountDistribution(any())).thenReturn(List.<Object[]>of(row));
+
+        AuditService.AmountDistributionStats stats = auditService.getAmountDistribution(30);
+
+        assertEquals(42L, stats.count());
+        assertEquals(0, BigDecimal.valueOf(100).compareTo(stats.min()));
+        assertEquals(0, BigDecimal.valueOf(900_000).compareTo(stats.max()));
+        assertEquals(0, BigDecimal.valueOf(45_000.5).compareTo(stats.avg()));
+        assertEquals(0, BigDecimal.valueOf(12_500.0).compareTo(stats.p50()));
+        assertEquals(0, BigDecimal.valueOf(780_000.0).compareTo(stats.p95()));
+    }
+
+    @Test
+    @DisplayName("getAmountDistribution() returns count=0 with null fields when no data in window")
+    void getAmountDistributionEmptyWhenNoData() {
+        Object[] row = new Object[]{0L, null, null, null, null, null};
+        when(repository.amountDistribution(any())).thenReturn(List.<Object[]>of(row));
+
+        AuditService.AmountDistributionStats stats = auditService.getAmountDistribution(30);
+
+        assertEquals(0L, stats.count());
+        assertNull(stats.min());
+        assertNull(stats.max());
+        assertNull(stats.avg());
+        assertNull(stats.p50());
+        assertNull(stats.p95());
+    }
 }

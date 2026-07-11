@@ -103,4 +103,25 @@ public interface AuditLogRepository extends JpaRepository<AuditLogEntity, Long>,
             LIMIT :limit
             """, nativeQuery = true)
     List<Object[]> topDecliningAccounts(@Param("since") Instant since, @Param("limit") int limit);
+
+    /**
+     * Returns amount distribution stats (count, min, max, avg, p50, p95) since the given instant.
+     *
+     * <p>Native SQL is required for {@code percentile_cont}, a Postgres ordered-set aggregate
+     * with no JPQL equivalent. Aggregate queries without {@code GROUP BY} always return exactly
+     * one row, even when no transactions match the filter (count is 0, the rest are {@code NULL}).
+     *
+     * @return single-row list: {@code [count, min, max, avg, p50, p95]}
+     */
+    @Query(value = """
+            SELECT COUNT(*)                                            AS cnt,
+                   MIN(amount)                                         AS min_amount,
+                   MAX(amount)                                         AS max_amount,
+                   AVG(amount)                                         AS avg_amount,
+                   percentile_cont(0.5) WITHIN GROUP (ORDER BY amount)  AS p50,
+                   percentile_cont(0.95) WITHIN GROUP (ORDER BY amount) AS p95
+            FROM audit_log
+            WHERE processed_at > :since
+            """, nativeQuery = true)
+    List<Object[]> amountDistribution(@Param("since") Instant since);
 }

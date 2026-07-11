@@ -167,4 +167,20 @@ public class AuditController {
             @Parameter(description = "Max rules to return") @RequestParam(defaultValue = "10") int limit) {
         return auditService.getRuleTriggerFrequency(days, Math.min(limit, 100));
     }
+
+    /**
+     * Returns transaction amount distribution stats over the last {@code days} days.
+     *
+     * @param days lookback window in days (default 30)
+     */
+    @GetMapping("/stats/amount-distribution")
+    @Operation(
+            summary = "Amount distribution",
+            description = "Returns count/min/max/avg/p50/p95 of transaction amounts over the given window, " +
+                          "sourced from a native SQL query using Postgres percentile_cont."
+    )
+    public AuditService.AmountDistributionStats getAmountDistribution(
+            @Parameter(description = "Lookback window in days") @RequestParam(defaultValue = "30") int days) {
+        return auditService.getAmountDistribution(days);
+    }
 }

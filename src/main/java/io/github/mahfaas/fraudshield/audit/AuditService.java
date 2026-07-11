@@ -347,6 +347,49 @@ public class AuditService {
         return result;
     }
 
+    /**
+     * Returns amount distribution stats (count, min, max, avg, p50, p95) over the last
+     * {@code days} days.
+     *
+     * @param days lookback window in days
+     * @return distribution stats; all fields except {@code count} are {@code null} when no
+     *         transactions fall in the window
+     */
+    @Transactional(readOnly = true)
+    public AmountDistributionStats getAmountDistribution(int days) {
+        Instant since = Instant.now().minus(days, ChronoUnit.DAYS);
+        Object[] row = repository.amountDistribution(since).get(0);
+
+        long count = ((Number) row[0]).longValue();
+        if (count == 0) {
+            return new AmountDistributionStats(0, null, null, null, null, null);
+        }
+
+        return new AmountDistributionStats(
+                count,
+                toBigDecimal(row[1]),
+                toBigDecimal(row[2]),
+                toBigDecimal(row[3]),
+                toBigDecimal(row[4]),
+                toBigDecimal(row[5])
+        );
+    }
+
+    /**
+     * Converts a native-query result cell to {@link BigDecimal}, tolerating both
+     * {@code NUMERIC} columns (already {@link BigDecimal}) and {@code percentile_cont}'s
+     * {@code double precision} result, as well as {@code null} for empty result sets.
+     */
+    private static BigDecimal toBigDecimal(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof BigDecimal bd) {
+            return bd;
+        }
+        return BigDecimal.valueOf(((Number) value).doubleValue());
+    }
+
     // ── Stats records ────────────────────────────────────────────────────────
 
     /**
@@ -388,5 +431,18 @@ public class AuditService {
     public record RuleTriggerCount(
             String ruleName,
             long triggerCount
+    ) {}
+
+    /**
+     * Transaction amount distribution over a time window. All fields except
+     * {@code count} are {@code null} when no transactions fall in the window.
+     */
+    public record AmountDistributionStats(
+            long count,
+            BigDecimal min,
+            BigDecimal max,
+            BigDecimal avg,
+            BigDecimal p50,
+            BigDecimal p95
     ) {}
 }
