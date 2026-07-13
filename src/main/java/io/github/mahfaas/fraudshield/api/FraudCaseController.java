@@ -24,6 +24,8 @@ import java.util.Map;
  *   GET  /api/v1/cases/by-status/{status}     — filter by lifecycle status
  *   GET  /api/v1/cases/stats                  — status count breakdown
  *   PUT  /api/v1/cases/{id}/status            — advance the case lifecycle
+ *   PUT  /api/v1/cases/{id}/assign            — assign/unassign a case to an analyst
+ *   GET  /api/v1/cases/by-assignee/{assignee} — filter by assigned analyst
  * </pre>
  *
  * <h3>Case lifecycle</h3>
@@ -114,6 +116,39 @@ public class FraudCaseController {
         return fraudCaseService.updateStatus(id, request.status(), request.analystNote());
     }
 
+    // ── Assignment ────────────────────────────────────────────────────────────
+
+    @PutMapping("/{id}/assign")
+    @Operation(
+            summary = "Assign or unassign a case",
+            description = """
+                    Sets the analyst assigned to work the case. Pass a null or blank
+                    assignee to unassign. Returns 409 Conflict if the case is already
+                    in a terminal (closed) status.
+                    """
+    )
+    public FraudCase assign(
+            @Parameter(description = "Case database ID") @PathVariable Long id,
+            @RequestBody AssignRequest request) {
+
+        return fraudCaseService.assign(id, request.assignee());
+    }
+
+    // ── Filter by assignee ────────────────────────────────────────────────────
+
+    @GetMapping("/by-assignee/{assignee}")
+    @Operation(
+            summary = "List cases by assignee",
+            description = "Returns paginated cases currently assigned to the given analyst."
+    )
+    public PagedResponse<FraudCase> getByAssignee(
+            @Parameter(description = "Assignee identifier") @PathVariable String assignee,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        return fraudCaseService.getByAssignee(assignee, page, Math.min(size, 50));
+    }
+
     // ── Notes / history log ──────────────────────────────────────────────────
 
     @PostMapping("/{id}/notes")
@@ -160,4 +195,11 @@ public class FraudCaseController {
      * @param note   the note content
      */
     public record AddNoteRequest(String author, String note) {}
+
+    /**
+     * Request body for the assign endpoint.
+     *
+     * @param assignee free-text analyst identifier, or null/blank to unassign
+     */
+    public record AssignRequest(String assignee) {}
 }

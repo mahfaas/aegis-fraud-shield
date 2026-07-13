@@ -159,6 +159,48 @@ public class FraudCaseService {
         return updated;
     }
 
+    // ── Assignment ────────────────────────────────────────────────────────────
+
+    /**
+     * Assigns (or unassigns) a case to an analyst.
+     *
+     * <p>Passing a null or blank {@code assignee} clears the assignment.
+     * Closed cases can no longer be reassigned — there is nothing left to work.
+     *
+     * @param id       the case database ID
+     * @param assignee free-text analyst identifier, or null/blank to unassign
+     * @return the updated case
+     * @throws FraudCaseNotFoundException if case not found
+     * @throws ResponseStatusException     if the case is already closed (409)
+     */
+    @Transactional
+    public FraudCase assign(Long id, String assignee) {
+        FraudCase fraudCase = repository.findById(id)
+                .orElseThrow(() -> new FraudCaseNotFoundException(id));
+
+        if (fraudCase.getStatus().isClosed()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cannot assign a case in terminal status " + fraudCase.getStatus());
+        }
+
+        String normalized = (assignee == null || assignee.isBlank()) ? null : assignee;
+        fraudCase.setAssignedTo(normalized);
+
+        FraudCase updated = repository.save(fraudCase);
+        log.info("FraudCase {} assigned to {}", id, normalized);
+        return updated;
+    }
+
+    /**
+     * Returns a paginated list of cases assigned to the given analyst, newest first.
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<FraudCase> getByAssignee(String assignee, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size);
+        Page<FraudCase> result = repository.findByAssignedToOrderByCreatedAtDesc(assignee, pageable);
+        return PagedResponse.of(result.getContent(), page, size, result.getTotalElements());
+    }
+
     // ── Aggregation ───────────────────────────────────────────────────────────
 
     /**

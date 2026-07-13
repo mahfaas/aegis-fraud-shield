@@ -23,6 +23,7 @@ import java.time.Instant;
  *   triggered_rules   TEXT       (pipe-delimited rule names)
  *   status            VARCHAR    NOT NULL DEFAULT 'OPEN'
  *   analyst_notes     TEXT       (free-text, updated by analysts)
+ *   assigned_to       VARCHAR    (free-text analyst identifier, nullable)
  *   created_at        TIMESTAMP  NOT NULL
  *   updated_at        TIMESTAMP  NOT NULL
  * </pre>
@@ -81,6 +82,14 @@ public class FraudCase {
      */
     @Column(name = "analyst_notes", columnDefinition = "TEXT")
     private String analystNotes;
+
+    /**
+     * Free-text identifier of the analyst currently working the case.
+     * Null means unassigned. No auth system exists, so this is not a
+     * foreign key to a user table — same rationale as {@link FraudCaseNote#getAuthor()}.
+     */
+    @Column(name = "assigned_to", length = 100)
+    private String assignedTo;
 
     /** UTC instant when the case was auto-created by {@link io.github.mahfaas.fraudshield.audit.AuditService}. */
     @Column(name = "created_at", nullable = false, updatable = false)

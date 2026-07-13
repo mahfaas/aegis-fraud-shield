@@ -8,6 +8,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+import org.springframework.web.server.ResponseStatusException;
 
 /**
  * Centralised exception → HTTP response mapping for the Fraud-Shield REST API.
@@ -17,6 +18,10 @@ import org.springframework.web.method.annotation.MethodArgumentTypeMismatchExcep
  *   <li>{@link TransactionValidationException} — 422 with per-field violations list</li>
  *   <li>Any other {@link FraudShieldException} subtype — status from the exception itself</li>
  *   <li>{@link MethodArgumentTypeMismatchException} — 400 for bad path/query params</li>
+ *   <li>{@link ResponseStatusException} — status taken from the exception itself
+ *       (e.g. the 409s thrown by {@code FraudCaseService}'s state-machine checks);
+ *       must be registered explicitly, otherwise the catch-all below would
+ *       swallow it and downgrade it to a generic 500</li>
  *   <li>Catch-all {@link Exception} — 500</li>
  * </ol>
  *
@@ -79,6 +84,23 @@ public class GlobalExceptionHandler {
                 message
         );
         return ResponseEntity.badRequest().body(body);
+    }
+
+    /**
+     * Handles {@link ResponseStatusException}, used for ad hoc HTTP errors that
+     * don't warrant a dedicated {@link FraudShieldException} subtype (e.g. the
+     * case state-machine 409 Conflicts in {@code FraudCaseService}).
+     */
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ErrorResponse> handleResponseStatus(ResponseStatusException ex) {
+        log.warn("Response status exception: {}", ex.getReason());
+        HttpStatus status = HttpStatus.valueOf(ex.getStatusCode().value());
+        ErrorResponse body = ErrorResponse.of(
+                status.value(),
+                status.getReasonPhrase(),
+                ex.getReason()
+        );
+        return ResponseEntity.status(ex.getStatusCode()).body(body);
     }
 
     // ── Catch-all ────────────────────────────────────────────────────────────

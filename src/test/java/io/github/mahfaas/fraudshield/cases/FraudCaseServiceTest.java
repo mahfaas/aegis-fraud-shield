@@ -263,6 +263,73 @@ class FraudCaseServiceTest {
         }
     }
 
+    // ── assign() / getByAssignee() ───────────────────────────────────────────
+
+    @Nested
+    @DisplayName("assign() / getByAssignee()")
+    class Assignment {
+
+        @Test
+        @DisplayName("assign() sets the assignee on an open case")
+        void assignSetsAssignee() {
+            FraudCase c = buildCase(1L, FraudCaseStatus.OPEN);
+            when(repository.findById(1L)).thenReturn(Optional.of(c));
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            FraudCase result = service.assign(1L, "analyst-1");
+
+            assertEquals("analyst-1", result.getAssignedTo());
+        }
+
+        @Test
+        @DisplayName("assign() with a blank assignee clears the assignment")
+        void assignBlankClearsAssignee() {
+            FraudCase c = buildCase(1L, FraudCaseStatus.INVESTIGATING);
+            c.setAssignedTo("analyst-1");
+            when(repository.findById(1L)).thenReturn(Optional.of(c));
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            FraudCase result = service.assign(1L, "  ");
+
+            assertNull(result.getAssignedTo());
+        }
+
+        @Test
+        @DisplayName("assign() rejects assignment of a closed case with 409")
+        void assignRejectsClosedCase() {
+            FraudCase c = buildCase(1L, FraudCaseStatus.CLOSED_FRAUD);
+            when(repository.findById(1L)).thenReturn(Optional.of(c));
+
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                    () -> service.assign(1L, "analyst-1"));
+
+            assertEquals(409, ex.getStatusCode().value());
+            verify(repository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("assign() throws FraudCaseNotFoundException when the case does not exist")
+        void assignThrowsWhenMissing() {
+            when(repository.findById(99L)).thenReturn(Optional.empty());
+
+            assertThrows(FraudCaseNotFoundException.class, () -> service.assign(99L, "analyst-1"));
+        }
+
+        @Test
+        @DisplayName("getByAssignee() delegates to the assignee-filtered repository query")
+        void getByAssigneeReturnsFilteredResponse() {
+            FraudCase c = buildCase(1L, FraudCaseStatus.INVESTIGATING);
+            c.setAssignedTo("analyst-1");
+            when(repository.findByAssignedToOrderByCreatedAtDesc(eq("analyst-1"), any(Pageable.class)))
+                    .thenReturn(new PageImpl<>(List.of(c)));
+
+            PagedResponse<FraudCase> result = service.getByAssignee("analyst-1", 0, 20);
+
+            assertEquals(1, result.content().size());
+            assertEquals("analyst-1", result.content().getFirst().getAssignedTo());
+        }
+    }
+
     // ── getStatusCounts() — aggregation ──────────────────────────────────────
 
     @Test

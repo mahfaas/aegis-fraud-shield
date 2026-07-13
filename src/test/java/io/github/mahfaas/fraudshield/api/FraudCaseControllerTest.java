@@ -190,11 +190,10 @@ class FraudCaseControllerTest {
         }
 
         @Test
-        @DisplayName("Invalid transition returns an error status (4xx or 5xx) for bad transitions")
+        @DisplayName("Invalid transition returns 409 Conflict")
         void invalidTransitionReturnsError() throws Exception {
-            // ResponseStatusException thrown from service is propagated through the controller.
-            // In a @WebMvcTest slice Spring MVC's ResponseStatusExceptionResolver is active
-            // and maps it to the embedded HTTP status code (409 Conflict).
+            // ResponseStatusException thrown from the service is mapped to its embedded
+            // status code by GlobalExceptionHandler#handleResponseStatus.
             when(fraudCaseService.updateStatus(eq(1L), eq(FraudCaseStatus.CLOSED_FRAUD), any()))
                     .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT,
                             "Invalid case status transition: OPEN -> CLOSED_FRAUD"));
@@ -206,7 +205,7 @@ class FraudCaseControllerTest {
             mockMvc.perform(put("/api/v1/cases/1/status")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(body))
-                    .andExpect(status().is(org.hamcrest.Matchers.greaterThanOrEqualTo(400))); // 4xx/5xx error
+                    .andExpect(status().isConflict());
         }
 
         @Test
@@ -223,6 +222,84 @@ class FraudCaseControllerTest {
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(body))
                     .andExpect(status().isNotFound());
+        }
+    }
+
+    // ── PUT /api/v1/cases/{id}/assign ─────────────────────────────────────────
+
+    @Nested
+    @DisplayName("PUT /api/v1/cases/{id}/assign — assignment")
+    class Assign {
+
+        @Test
+        @DisplayName("Returns 200 with the assigned case")
+        void assignsCase() throws Exception {
+            FraudCase assigned = openCase();
+            assigned.setAssignedTo("analyst-1");
+            when(fraudCaseService.assign(eq(1L), eq("analyst-1"))).thenReturn(assigned);
+
+            String body = """
+                    {"assignee":"analyst-1"}
+                    """;
+
+            mockMvc.perform(put("/api/v1/cases/1/assign")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.assignedTo").value("analyst-1"));
+        }
+
+        @Test
+        @DisplayName("Returns 409 when the case is closed")
+        void returns409ForClosedCase() throws Exception {
+            when(fraudCaseService.assign(eq(1L), eq("analyst-1")))
+                    .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Cannot assign a case in terminal status CLOSED_FRAUD"));
+
+            String body = """
+                    {"assignee":"analyst-1"}
+                    """;
+
+            mockMvc.perform(put("/api/v1/cases/1/assign")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isConflict());
+        }
+
+        @Test
+        @DisplayName("Returns 404 when case not found")
+        void returns404ForUnknownCase() throws Exception {
+            when(fraudCaseService.assign(eq(99L), any()))
+                    .thenThrow(new FraudCaseNotFoundException(99L));
+
+            String body = """
+                    {"assignee":"analyst-1"}
+                    """;
+
+            mockMvc.perform(put("/api/v1/cases/99/assign")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isNotFound());
+        }
+    }
+
+    // ── GET /api/v1/cases/by-assignee/{assignee} ──────────────────────────────
+
+    @Nested
+    @DisplayName("GET /api/v1/cases/by-assignee/{assignee}")
+    class GetByAssignee {
+
+        @Test
+        @DisplayName("Returns 200 with cases assigned to the analyst")
+        void returnsAssignedCases() throws Exception {
+            FraudCase assigned = openCase();
+            assigned.setAssignedTo("analyst-1");
+            PagedResponse<FraudCase> response = PagedResponse.of(List.of(assigned), 0, 20, 1L);
+            when(fraudCaseService.getByAssignee("analyst-1", 0, 20)).thenReturn(response);
+
+            mockMvc.perform(get("/api/v1/cases/by-assignee/analyst-1"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content[0].assignedTo").value("analyst-1"));
         }
     }
 

@@ -25,6 +25,9 @@ public interface FraudCaseRepository extends JpaRepository<FraudCase, Long> {
     /** Paginated query filtered by lifecycle status. */
     Page<FraudCase> findByStatusOrderByCreatedAtDesc(FraudCaseStatus status, Pageable pageable);
 
+    /** Paginated query filtered by assignee. */
+    Page<FraudCase> findByAssignedToOrderByCreatedAtDesc(String assignedTo, Pageable pageable);
+
     /**
      * JPQL GROUP BY query — returns pairs of [status, count].
      * Demonstrates the same raw-JPQL aggregation technique as
