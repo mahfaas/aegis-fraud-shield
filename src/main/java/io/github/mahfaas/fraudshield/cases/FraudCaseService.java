@@ -12,6 +12,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -311,6 +313,73 @@ public class FraudCaseService {
         }
         return noteRepository.findByFraudCaseIdOrderByCreatedAtDesc(caseId);
     }
+
+    /**
+     * Reports how MANUAL_REVIEW verdicts from the Rule Engine were ultimately
+     * resolved by analysts over the given lookback window — a proxy for rule
+     * engine precision.
+     *
+     * <p>{@code CLOSED_LEGITIMATE} outcomes are false positives (the engine
+     * flagged a transaction an analyst judged fine); {@code CLOSED_FRAUD}
+     * outcomes are true positives. {@code OPEN}/{@code INVESTIGATING} cases
+     * are still pending and excluded from the rate calculations.
+     *
+     * @param days lookback window in days
+     * @return the accuracy breakdown; rate fields are {@code null} when no
+     *         cases have been closed yet in the window (avoids a divide-by-zero)
+     */
+    @Transactional(readOnly = true)
+    public ReviewAccuracyStats getReviewAccuracy(int days) {
+        Instant since = Instant.now().minus(days, ChronoUnit.DAYS);
+        List<Object[]> rows = repository.countByStatusSince(since);
+
+        Map<FraudCaseStatus, Long> counts = rows.stream()
+                .collect(Collectors.toMap(
+                        row -> (FraudCaseStatus) row[0],
+                        row -> (Long) row[1],
+                        (a, b) -> a,
+                        () -> new EnumMap<>(FraudCaseStatus.class)
+                ));
+
+        long closedFraud = counts.getOrDefault(FraudCaseStatus.CLOSED_FRAUD, 0L);
+        long closedLegitimate = counts.getOrDefault(FraudCaseStatus.CLOSED_LEGITIMATE, 0L);
+        long stillOpen = counts.getOrDefault(FraudCaseStatus.OPEN, 0L)
+                + counts.getOrDefault(FraudCaseStatus.INVESTIGATING, 0L);
+        long totalCases = closedFraud + closedLegitimate + stillOpen;
+        long totalClosed = closedFraud + closedLegitimate;
+
+        Double falsePositiveRate = totalClosed == 0 ? null : (double) closedLegitimate / totalClosed;
+        Double truePositiveRate = totalClosed == 0 ? null : (double) closedFraud / totalClosed;
+        Double resolvedRate = totalCases == 0 ? null : (double) totalClosed / totalCases;
+
+        return new ReviewAccuracyStats(
+                days, totalCases, closedFraud, closedLegitimate, stillOpen,
+                falsePositiveRate, truePositiveRate, resolvedRate
+        );
+    }
+
+    /**
+     * Review-accuracy report for {@link #getReviewAccuracy}.
+     *
+     * @param windowDays         the lookback window this report covers
+     * @param totalCases         total cases created in the window
+     * @param closedFraud        cases confirmed as fraud (true positives)
+     * @param closedLegitimate   cases confirmed as legitimate (false positives)
+     * @param stillOpen          cases still OPEN or INVESTIGATING
+     * @param falsePositiveRate  closedLegitimate / totalClosed, or null if nothing has closed yet
+     * @param truePositiveRate   closedFraud / totalClosed, or null if nothing has closed yet
+     * @param resolvedRate       totalClosed / totalCases, or null if totalCases is zero
+     */
+    public record ReviewAccuracyStats(
+            int windowDays,
+            long totalCases,
+            long closedFraud,
+            long closedLegitimate,
+            long stillOpen,
+            Double falsePositiveRate,
+            Double truePositiveRate,
+            Double resolvedRate
+    ) {}
 
     // ── Private helpers ───────────────────────────────────────────────────────
 

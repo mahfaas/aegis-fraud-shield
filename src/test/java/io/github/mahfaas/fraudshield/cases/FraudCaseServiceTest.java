@@ -417,6 +417,65 @@ class FraudCaseServiceTest {
         assertTrue(service.getStatusCounts().isEmpty());
     }
 
+    // ── getReviewAccuracy() ───────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("getReviewAccuracy()")
+    class ReviewAccuracy {
+
+        @Test
+        @DisplayName("computes false/true positive and resolved rates from status counts")
+        void computesRatesFromStatusCounts() {
+            List<Object[]> mockRows = List.of(
+                    new Object[]{FraudCaseStatus.CLOSED_FRAUD, 3L},
+                    new Object[]{FraudCaseStatus.CLOSED_LEGITIMATE, 1L},
+                    new Object[]{FraudCaseStatus.OPEN, 1L},
+                    new Object[]{FraudCaseStatus.INVESTIGATING, 2L}
+            );
+            when(repository.countByStatusSince(any())).thenReturn(mockRows);
+
+            FraudCaseService.ReviewAccuracyStats stats = service.getReviewAccuracy(30);
+
+            assertEquals(30, stats.windowDays());
+            assertEquals(7, stats.totalCases());
+            assertEquals(3L, stats.closedFraud());
+            assertEquals(1L, stats.closedLegitimate());
+            assertEquals(3L, stats.stillOpen());
+            assertEquals(0.75, stats.truePositiveRate());
+            assertEquals(0.25, stats.falsePositiveRate());
+            assertEquals(4.0 / 7, stats.resolvedRate());
+        }
+
+        @Test
+        @DisplayName("returns null rates when no cases have closed yet")
+        void returnsNullRatesWhenNothingClosed() {
+            List<Object[]> mockRows = List.<Object[]>of(
+                    new Object[]{FraudCaseStatus.OPEN, 4L}
+            );
+            when(repository.countByStatusSince(any())).thenReturn(mockRows);
+
+            FraudCaseService.ReviewAccuracyStats stats = service.getReviewAccuracy(7);
+
+            assertEquals(4L, stats.totalCases());
+            assertNull(stats.falsePositiveRate());
+            assertNull(stats.truePositiveRate());
+            assertEquals(0.0, stats.resolvedRate());
+        }
+
+        @Test
+        @DisplayName("returns all-null rates when no cases exist in the window")
+        void returnsNullRatesWhenNoCases() {
+            when(repository.countByStatusSince(any())).thenReturn(List.of());
+
+            FraudCaseService.ReviewAccuracyStats stats = service.getReviewAccuracy(30);
+
+            assertEquals(0L, stats.totalCases());
+            assertNull(stats.falsePositiveRate());
+            assertNull(stats.truePositiveRate());
+            assertNull(stats.resolvedRate());
+        }
+    }
+
     // ── addNote() / getNotes() — history log ─────────────────────────────────
 
     @Nested

@@ -23,6 +23,7 @@ import java.util.Map;
  *   GET  /api/v1/cases/{id}                   — get a specific case
  *   GET  /api/v1/cases/by-status/{status}     — filter by lifecycle status
  *   GET  /api/v1/cases/stats                  — status count breakdown
+ *   GET  /api/v1/cases/stats/review-accuracy  — manual-review outcome accuracy (rule precision)
  *   PUT  /api/v1/cases/{id}/status            — advance the case lifecycle
  *   PUT  /api/v1/cases/{id}/assign            — assign/unassign a case to an analyst
  *   GET  /api/v1/cases/by-assignee/{assignee} — filter by assigned analyst
@@ -94,6 +95,23 @@ public class FraudCaseController {
     )
     public Map<FraudCaseStatus, Long> getStatusCounts() {
         return fraudCaseService.getStatusCounts();
+    }
+
+    @GetMapping("/stats/review-accuracy")
+    @Operation(
+            summary = "Manual-review outcome accuracy",
+            description = """
+                    Reports how MANUAL_REVIEW verdicts from the Rule Engine were ultimately
+                    resolved by analysts over the given lookback window — a proxy for rule
+                    engine precision. CLOSED_LEGITIMATE outcomes are false positives;
+                    CLOSED_FRAUD outcomes are true positives. Rate fields are null when no
+                    cases have closed yet in the window.
+                    """
+    )
+    public FraudCaseService.ReviewAccuracyStats getReviewAccuracy(
+            @Parameter(description = "Lookback window in days") @RequestParam(defaultValue = "30") int days) {
+
+        return fraudCaseService.getReviewAccuracy(days);
     }
 
     // ── Status update (state machine) ─────────────────────────────────────────

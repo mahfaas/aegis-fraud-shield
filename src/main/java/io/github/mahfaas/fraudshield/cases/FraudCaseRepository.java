@@ -4,7 +4,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Optional;
 
 /**
@@ -35,4 +37,13 @@ public interface FraudCaseRepository extends JpaRepository<FraudCase, Long> {
      */
     @Query("SELECT c.status, COUNT(c) FROM FraudCase c GROUP BY c.status")
     java.util.List<Object[]> countByStatus();
+
+    /**
+     * JPQL GROUP BY query scoped to a lookback window — returns pairs of
+     * [status, count] for cases created since the given instant. Backs the
+     * review-accuracy report, which measures how MANUAL_REVIEW verdicts from
+     * the Rule Engine were ultimately resolved by analysts.
+     */
+    @Query("SELECT c.status, COUNT(c) FROM FraudCase c WHERE c.createdAt >= :since GROUP BY c.status")
+    java.util.List<Object[]> countByStatusSince(@Param("since") Instant since);
 }

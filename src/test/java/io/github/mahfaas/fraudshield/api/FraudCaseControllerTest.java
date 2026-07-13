@@ -165,6 +165,43 @@ class FraudCaseControllerTest {
         }
     }
 
+    // ── GET /api/v1/cases/stats/review-accuracy ───────────────────────────────
+
+    @Nested
+    @DisplayName("GET /api/v1/cases/stats/review-accuracy")
+    class GetReviewAccuracy {
+
+        @Test
+        @DisplayName("Returns 200 with the accuracy breakdown, defaulting to a 30-day window")
+        void returnsAccuracyBreakdown() throws Exception {
+            FraudCaseService.ReviewAccuracyStats stats = new FraudCaseService.ReviewAccuracyStats(
+                    30, 7L, 3L, 1L, 3L, 0.25, 0.75, 4.0 / 7);
+            when(fraudCaseService.getReviewAccuracy(30)).thenReturn(stats);
+
+            mockMvc.perform(get("/api/v1/cases/stats/review-accuracy"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.windowDays").value(30))
+                    .andExpect(jsonPath("$.totalCases").value(7))
+                    .andExpect(jsonPath("$.closedFraud").value(3))
+                    .andExpect(jsonPath("$.closedLegitimate").value(1))
+                    .andExpect(jsonPath("$.truePositiveRate").value(0.75))
+                    .andExpect(jsonPath("$.falsePositiveRate").value(0.25));
+        }
+
+        @Test
+        @DisplayName("Honors an explicit days parameter")
+        void honorsDaysParameter() throws Exception {
+            FraudCaseService.ReviewAccuracyStats stats = new FraudCaseService.ReviewAccuracyStats(
+                    7, 0L, 0L, 0L, 0L, null, null, null);
+            when(fraudCaseService.getReviewAccuracy(7)).thenReturn(stats);
+
+            mockMvc.perform(get("/api/v1/cases/stats/review-accuracy").param("days", "7"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.windowDays").value(7))
+                    .andExpect(jsonPath("$.falsePositiveRate").value(org.hamcrest.Matchers.nullValue()));
+        }
+    }
+
     // ── PUT /api/v1/cases/{id}/status ─────────────────────────────────────────
 
     @Nested
