@@ -77,19 +77,38 @@ public class FraudCaseService {
                 .map(r -> r.replaceAll("\\[(.+?)].*", "$1").trim())
                 .collect(Collectors.joining("|"));
 
+        int riskScore = verdictedTransaction.getTotalRiskScore();
+
         FraudCase fraudCase = FraudCase.builder()
                 .transactionId(txId)
                 .accountId(verdictedTransaction.getTransaction().getAccountId())
                 .amount(verdictedTransaction.getTransaction().getAmount())
-                .riskScore(verdictedTransaction.getTotalRiskScore())
+                .riskScore(riskScore)
                 .triggeredRules(triggeredRules)
                 .status(FraudCaseStatus.OPEN)
+                .priority(computePriority(riskScore))
                 .build();
 
         FraudCase saved = repository.save(fraudCase);
-        log.info("FraudCase created: id={}, txId={}, riskScore={}",
-                saved.getId(), txId, saved.getRiskScore());
+        log.info("FraudCase created: id={}, txId={}, riskScore={}, priority={}",
+                saved.getId(), txId, saved.getRiskScore(), saved.getPriority());
         return saved;
+    }
+
+    /**
+     * Derives a {@link CasePriority} from the composite risk score at case
+     * creation time. Thresholds: {@code LOW} below 50, {@code MEDIUM} 50–74,
+     * {@code HIGH} 75 and above — mirroring how close the score sits to the
+     * {@code fraud.rules.risk-score.hard-threshold} auto-decline cutoff.
+     */
+    static CasePriority computePriority(int riskScore) {
+        if (riskScore >= 75) {
+            return CasePriority.HIGH;
+        }
+        if (riskScore >= 50) {
+            return CasePriority.MEDIUM;
+        }
+        return CasePriority.LOW;
     }
 
     // ── Read operations ───────────────────────────────────────────────────────
@@ -200,6 +219,16 @@ public class FraudCaseService {
     public PagedResponse<FraudCase> getByAssignee(String assignee, int page, int size) {
         PageRequest pageable = PageRequest.of(page, size);
         Page<FraudCase> result = repository.findByAssignedToOrderByCreatedAtDesc(assignee, pageable);
+        return PagedResponse.of(result.getContent(), page, size, result.getTotalElements());
+    }
+
+    /**
+     * Returns a paginated list of cases filtered by triage priority, newest first.
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<FraudCase> getByPriority(CasePriority priority, int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size);
+        Page<FraudCase> result = repository.findByPriorityOrderByCreatedAtDesc(priority, pageable);
         return PagedResponse.of(result.getContent(), page, size, result.getTotalElements());
     }
 

@@ -1,5 +1,6 @@
 package io.github.mahfaas.fraudshield.api;
 
+import io.github.mahfaas.fraudshield.cases.CasePriority;
 import io.github.mahfaas.fraudshield.cases.FraudCase;
 import io.github.mahfaas.fraudshield.cases.FraudCaseNote;
 import io.github.mahfaas.fraudshield.cases.FraudCaseNotFoundException;
@@ -142,6 +143,35 @@ class FraudCaseControllerTest {
         @DisplayName("Returns 400 for invalid status value")
         void returns400ForInvalidStatus() throws Exception {
             mockMvc.perform(get("/api/v1/cases/by-status/INVALID_STATUS"))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    // ── GET /api/v1/cases/by-priority/{priority} ──────────────────────────────
+
+    @Nested
+    @DisplayName("GET /api/v1/cases/by-priority/{priority}")
+    class GetByPriority {
+
+        @Test
+        @DisplayName("Returns 200 with high-priority cases")
+        void returnsHighPriorityCases() throws Exception {
+            FraudCase highPriorityCase = openCase();
+            highPriorityCase.setPriority(CasePriority.HIGH);
+            PagedResponse<FraudCase> response =
+                    PagedResponse.of(List.of(highPriorityCase), 0, 20, 1L);
+            when(fraudCaseService.getByPriority(CasePriority.HIGH, 0, 20))
+                    .thenReturn(response);
+
+            mockMvc.perform(get("/api/v1/cases/by-priority/HIGH"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content[0].priority").value("HIGH"));
+        }
+
+        @Test
+        @DisplayName("Returns 400 for invalid priority value")
+        void returns400ForInvalidPriority() throws Exception {
+            mockMvc.perform(get("/api/v1/cases/by-priority/INVALID_PRIORITY"))
                     .andExpect(status().isBadRequest());
         }
     }

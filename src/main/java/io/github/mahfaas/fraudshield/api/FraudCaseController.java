@@ -1,5 +1,6 @@
 package io.github.mahfaas.fraudshield.api;
 
+import io.github.mahfaas.fraudshield.cases.CasePriority;
 import io.github.mahfaas.fraudshield.cases.FraudCase;
 import io.github.mahfaas.fraudshield.cases.FraudCaseNote;
 import io.github.mahfaas.fraudshield.cases.FraudCaseService;
@@ -22,6 +23,7 @@ import java.util.Map;
  *   GET  /api/v1/cases                        — list all cases (paginated)
  *   GET  /api/v1/cases/{id}                   — get a specific case
  *   GET  /api/v1/cases/by-status/{status}     — filter by lifecycle status
+ *   GET  /api/v1/cases/by-priority/{priority} — filter by triage priority (LOW/MEDIUM/HIGH)
  *   GET  /api/v1/cases/stats                  — status count breakdown
  *   GET  /api/v1/cases/stats/review-accuracy  — manual-review outcome accuracy (rule precision)
  *   PUT  /api/v1/cases/{id}/status            — advance the case lifecycle
@@ -84,6 +86,21 @@ public class FraudCaseController {
             @RequestParam(defaultValue = "20") int size) {
 
         return fraudCaseService.getByStatus(status, page, Math.min(size, 50));
+    }
+
+    // ── Filter by priority ────────────────────────────────────────────────────
+
+    @GetMapping("/by-priority/{priority}")
+    @Operation(
+            summary = "List cases by triage priority",
+            description = "Returns paginated cases filtered by LOW, MEDIUM, or HIGH triage priority."
+    )
+    public PagedResponse<FraudCase> getByPriority(
+            @Parameter(description = "Case priority to filter by") @PathVariable CasePriority priority,
+            @RequestParam(defaultValue = "0")  int page,
+            @RequestParam(defaultValue = "20") int size) {
+
+        return fraudCaseService.getByPriority(priority, page, Math.min(size, 50));
     }
 
     // ── Stats ─────────────────────────────────────────────────────────────────

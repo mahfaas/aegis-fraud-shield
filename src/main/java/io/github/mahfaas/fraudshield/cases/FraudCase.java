@@ -24,6 +24,7 @@ import java.time.Instant;
  *   status            VARCHAR    NOT NULL DEFAULT 'OPEN'
  *   analyst_notes     TEXT       (free-text, updated by analysts)
  *   assigned_to       VARCHAR    (free-text analyst identifier, nullable)
+ *   priority          VARCHAR    NOT NULL DEFAULT 'LOW'  (derived from risk_score at creation)
  *   created_at        TIMESTAMP  NOT NULL
  *   updated_at        TIMESTAMP  NOT NULL
  * </pre>
@@ -90,6 +91,16 @@ public class FraudCase {
      */
     @Column(name = "assigned_to", length = 100)
     private String assignedTo;
+
+    /**
+     * Triage priority, derived once from {@link #riskScore} at creation time
+     * via {@link FraudCaseService#computePriority}. Drives the analyst review
+     * queue ordering.
+     */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    @Builder.Default
+    private CasePriority priority = CasePriority.LOW;
 
     /** UTC instant when the case was auto-created by {@link io.github.mahfaas.fraudshield.audit.AuditService}. */
     @Column(name = "created_at", nullable = false, updatable = false)

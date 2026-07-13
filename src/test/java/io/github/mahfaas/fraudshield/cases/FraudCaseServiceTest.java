@@ -114,6 +114,7 @@ class FraudCaseServiceTest {
             assertEquals(75, captured.getRiskScore());
             assertEquals(FraudCaseStatus.OPEN, captured.getStatus());
             assertEquals("GEO_VELOCITY|TIME_WINDOW", captured.getTriggeredRules());
+            assertEquals(CasePriority.HIGH, captured.getPriority());
             assertSame(captured, result);
         }
 
@@ -327,6 +328,48 @@ class FraudCaseServiceTest {
 
             assertEquals(1, result.content().size());
             assertEquals("analyst-1", result.content().getFirst().getAssignedTo());
+        }
+    }
+
+    // ── computePriority() / getByPriority() ──────────────────────────────────
+
+    @Nested
+    @DisplayName("computePriority() / getByPriority()")
+    class Priority {
+
+        @Test
+        @DisplayName("riskScore below 50 is LOW")
+        void lowPriorityBelow50() {
+            assertEquals(CasePriority.LOW, FraudCaseService.computePriority(0));
+            assertEquals(CasePriority.LOW, FraudCaseService.computePriority(49));
+        }
+
+        @Test
+        @DisplayName("riskScore 50-74 is MEDIUM")
+        void mediumPriorityRange() {
+            assertEquals(CasePriority.MEDIUM, FraudCaseService.computePriority(50));
+            assertEquals(CasePriority.MEDIUM, FraudCaseService.computePriority(74));
+        }
+
+        @Test
+        @DisplayName("riskScore 75 and above is HIGH")
+        void highPriorityAbove75() {
+            assertEquals(CasePriority.HIGH, FraudCaseService.computePriority(75));
+            assertEquals(CasePriority.HIGH, FraudCaseService.computePriority(150));
+        }
+
+        @Test
+        @DisplayName("getByPriority() delegates to the priority-filtered repository query")
+        void getByPriorityReturnsFilteredResponse() {
+            FraudCase c = buildCase(1L, FraudCaseStatus.OPEN);
+            c.setPriority(CasePriority.HIGH);
+            when(repository.findByPriorityOrderByCreatedAtDesc(eq(CasePriority.HIGH), any(Pageable.class)))
+                    .thenReturn(new PageImpl<>(List.of(c)));
+
+            PagedResponse<FraudCase> result = service.getByPriority(CasePriority.HIGH, 0, 20);
+
+            assertEquals(1, result.content().size());
+            assertEquals(CasePriority.HIGH, result.content().getFirst().getPriority());
         }
     }
 
