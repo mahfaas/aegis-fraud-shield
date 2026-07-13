@@ -26,6 +26,7 @@ import java.util.Map;
  *   PUT  /api/v1/cases/{id}/status            — advance the case lifecycle
  *   PUT  /api/v1/cases/{id}/assign            — assign/unassign a case to an analyst
  *   GET  /api/v1/cases/by-assignee/{assignee} — filter by assigned analyst
+ *   POST /api/v1/cases/{id}/reopen            — reopen a closed case (requires a reason)
  * </pre>
  *
  * <h3>Case lifecycle</h3>
@@ -149,6 +150,25 @@ public class FraudCaseController {
         return fraudCaseService.getByAssignee(assignee, page, Math.min(size, 50));
     }
 
+    // ── Reopen (explicit escape hatch) ────────────────────────────────────────
+
+    @PostMapping("/{id}/reopen")
+    @Operation(
+            summary = "Reopen a closed case",
+            description = """
+                    Reopens a CLOSED_FRAUD or CLOSED_LEGITIMATE case back to INVESTIGATING.
+                    A non-blank reason is mandatory and is recorded as a case note.
+                    Returns 409 Conflict if the case is not currently closed, or 400 Bad
+                    Request if no reason is given.
+                    """
+    )
+    public FraudCase reopen(
+            @Parameter(description = "Case database ID") @PathVariable Long id,
+            @RequestBody ReopenRequest request) {
+
+        return fraudCaseService.reopen(id, request.reopenedBy(), request.reason());
+    }
+
     // ── Notes / history log ──────────────────────────────────────────────────
 
     @PostMapping("/{id}/notes")
@@ -202,4 +222,12 @@ public class FraudCaseController {
      * @param assignee free-text analyst identifier, or null/blank to unassign
      */
     public record AssignRequest(String assignee) {}
+
+    /**
+     * Request body for the reopen endpoint.
+     *
+     * @param reopenedBy optional free-text identifier of who reopened the case (no auth system exists)
+     * @param reason     mandatory justification for the reopen
+     */
+    public record ReopenRequest(String reopenedBy, String reason) {}
 }

@@ -201,6 +201,53 @@ public class FraudCaseService {
         return PagedResponse.of(result.getContent(), page, size, result.getTotalElements());
     }
 
+    // ── Reopen (explicit escape hatch) ───────────────────────────────────────
+
+    /**
+     * Reopens a closed case back to {@code INVESTIGATING}.
+     *
+     * <p>Unlike {@link #updateStatus}, which strictly enforces forward-only
+     * transitions, this is a deliberate override for the case where a
+     * supervisor needs to revisit a determination (e.g. new evidence surfaces).
+     * A non-blank {@code reason} is mandatory, and the reopen is recorded as a
+     * {@link FraudCaseNote} so the override is visible in the case history.
+     *
+     * @param id         the case database ID
+     * @param reopenedBy optional free-text identifier of who reopened the case (no auth system exists)
+     * @param reason     mandatory justification for the reopen
+     * @return the updated case, now in {@code INVESTIGATING}
+     * @throws FraudCaseNotFoundException if case not found
+     * @throws ResponseStatusException     if the case is not currently closed (409),
+     *                                     or if no reason was given (400)
+     */
+    @Transactional
+    public FraudCase reopen(Long id, String reopenedBy, String reason) {
+        FraudCase fraudCase = repository.findById(id)
+                .orElseThrow(() -> new FraudCaseNotFoundException(id));
+
+        if (!fraudCase.getStatus().isClosed()) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Cannot reopen a case that is not closed: current status " + fraudCase.getStatus());
+        }
+        if (reason == null || reason.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "A reason is required to reopen a case");
+        }
+
+        FraudCaseStatus previousStatus = fraudCase.getStatus();
+        fraudCase.setStatus(FraudCaseStatus.INVESTIGATING);
+        FraudCase updated = repository.save(fraudCase);
+
+        noteRepository.save(FraudCaseNote.builder()
+                .fraudCase(updated)
+                .author(reopenedBy)
+                .note("Case reopened from " + previousStatus + ": " + reason)
+                .build());
+
+        log.info("FraudCase {} reopened from {} by {}", id, previousStatus, reopenedBy);
+        return updated;
+    }
+
     // ── Aggregation ───────────────────────────────────────────────────────────
 
     /**

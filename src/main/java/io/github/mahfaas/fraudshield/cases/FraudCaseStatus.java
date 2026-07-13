@@ -5,12 +5,16 @@ package io.github.mahfaas.fraudshield.cases;
  *
  * <pre>
  *   OPEN ──► INVESTIGATING ──► CLOSED_FRAUD
- *                           └──► CLOSED_LEGITIMATE
+ *              ▲              └──► CLOSED_LEGITIMATE
+ *              └───────────────────────┘
+ *                   (explicit reopen)
  * </pre>
  *
  * <p>State transitions are validated in {@link FraudCaseService#updateStatus} —
  * only forward transitions are permitted to prevent accidental re-opening of
- * closed cases.
+ * closed cases. The only way back from a closed state is the explicit,
+ * reason-required {@link FraudCaseService#reopen} escape hatch, which is a
+ * separate operation from the normal lifecycle advance.
  */
 public enum FraudCaseStatus {
 

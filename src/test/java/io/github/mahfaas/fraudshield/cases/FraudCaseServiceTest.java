@@ -330,6 +330,67 @@ class FraudCaseServiceTest {
         }
     }
 
+    // ── reopen() — explicit escape hatch ─────────────────────────────────────
+
+    @Nested
+    @DisplayName("reopen()")
+    class Reopen {
+
+        @Test
+        @DisplayName("reopen() moves a closed case back to INVESTIGATING and records a note")
+        void reopenMovesClosedCaseToInvestigating() {
+            FraudCase c = buildCase(1L, FraudCaseStatus.CLOSED_FRAUD);
+            when(repository.findById(1L)).thenReturn(Optional.of(c));
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            ArgumentCaptor<FraudCaseNote> noteCaptor = ArgumentCaptor.forClass(FraudCaseNote.class);
+            when(noteRepository.save(noteCaptor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+            FraudCase result = service.reopen(1L, "supervisor-1", "New evidence surfaced");
+
+            assertEquals(FraudCaseStatus.INVESTIGATING, result.getStatus());
+            FraudCaseNote note = noteCaptor.getValue();
+            assertEquals("supervisor-1", note.getAuthor());
+            assertTrue(note.getNote().contains("New evidence surfaced"));
+            assertTrue(note.getNote().contains("CLOSED_FRAUD"));
+        }
+
+        @Test
+        @DisplayName("reopen() rejects a case that is not closed with 409")
+        void reopenRejectsNonClosedCase() {
+            FraudCase c = buildCase(1L, FraudCaseStatus.INVESTIGATING);
+            when(repository.findById(1L)).thenReturn(Optional.of(c));
+
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                    () -> service.reopen(1L, "supervisor-1", "reason"));
+
+            assertEquals(409, ex.getStatusCode().value());
+            verify(repository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("reopen() rejects a blank reason with 400")
+        void reopenRejectsBlankReason() {
+            FraudCase c = buildCase(1L, FraudCaseStatus.CLOSED_LEGITIMATE);
+            when(repository.findById(1L)).thenReturn(Optional.of(c));
+
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                    () -> service.reopen(1L, "supervisor-1", "  "));
+
+            assertEquals(400, ex.getStatusCode().value());
+            verify(repository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("reopen() throws FraudCaseNotFoundException when the case does not exist")
+        void reopenThrowsWhenMissing() {
+            when(repository.findById(99L)).thenReturn(Optional.empty());
+
+            assertThrows(FraudCaseNotFoundException.class,
+                    () -> service.reopen(99L, "supervisor-1", "reason"));
+        }
+    }
+
     // ── getStatusCounts() — aggregation ──────────────────────────────────────
 
     @Test

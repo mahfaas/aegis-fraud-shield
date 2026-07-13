@@ -303,6 +303,82 @@ class FraudCaseControllerTest {
         }
     }
 
+    // ── POST /api/v1/cases/{id}/reopen ────────────────────────────────────────
+
+    @Nested
+    @DisplayName("POST /api/v1/cases/{id}/reopen — reopen closed case")
+    class Reopen {
+
+        @Test
+        @DisplayName("Returns 200 with the reopened case")
+        void reopensCase() throws Exception {
+            FraudCase reopened = openCase();
+            reopened.setStatus(FraudCaseStatus.INVESTIGATING);
+            when(fraudCaseService.reopen(eq(1L), eq("supervisor-1"), eq("New evidence")))
+                    .thenReturn(reopened);
+
+            String body = """
+                    {"reopenedBy":"supervisor-1","reason":"New evidence"}
+                    """;
+
+            mockMvc.perform(post("/api/v1/cases/1/reopen")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("INVESTIGATING"));
+        }
+
+        @Test
+        @DisplayName("Returns 409 when the case is not closed")
+        void returns409ForNonClosedCase() throws Exception {
+            when(fraudCaseService.reopen(eq(1L), any(), any()))
+                    .thenThrow(new ResponseStatusException(HttpStatus.CONFLICT,
+                            "Cannot reopen a case that is not closed: current status INVESTIGATING"));
+
+            String body = """
+                    {"reopenedBy":"supervisor-1","reason":"reason"}
+                    """;
+
+            mockMvc.perform(post("/api/v1/cases/1/reopen")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isConflict());
+        }
+
+        @Test
+        @DisplayName("Returns 400 when no reason is given")
+        void returns400ForMissingReason() throws Exception {
+            when(fraudCaseService.reopen(eq(1L), any(), any()))
+                    .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "A reason is required to reopen a case"));
+
+            String body = """
+                    {"reopenedBy":"supervisor-1","reason":""}
+                    """;
+
+            mockMvc.perform(post("/api/v1/cases/1/reopen")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isBadRequest());
+        }
+
+        @Test
+        @DisplayName("Returns 404 when case not found")
+        void returns404ForUnknownCase() throws Exception {
+            when(fraudCaseService.reopen(eq(99L), any(), any()))
+                    .thenThrow(new FraudCaseNotFoundException(99L));
+
+            String body = """
+                    {"reopenedBy":"supervisor-1","reason":"reason"}
+                    """;
+
+            mockMvc.perform(post("/api/v1/cases/99/reopen")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isNotFound());
+        }
+    }
+
     // ── POST /api/v1/cases/{id}/notes ─────────────────────────────────────────
 
     @Nested
