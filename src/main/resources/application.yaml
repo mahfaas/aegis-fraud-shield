@@ -71,6 +71,12 @@ fraud:
       soft-threshold: 60   # accumulated score >= soft → escalate APPROVED to MANUAL_REVIEW
       hard-threshold: 90   # accumulated score >= hard → always DECLINED
 
+  cases:
+    sla:
+      high-hours: 4    # HIGH-priority cases (riskScore >= 75) must be resolved within this window
+      medium-hours: 24 # MEDIUM-priority cases (riskScore 50-74)
+      low-hours: 72    # LOW-priority cases (riskScore < 50)
+
   alerts:
     enabled: false          # set to true and configure webhook-url to enable
     webhook-url: ""

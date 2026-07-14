@@ -25,6 +25,7 @@ import java.time.Instant;
  *   analyst_notes     TEXT       (free-text, updated by analysts)
  *   assigned_to       VARCHAR    (free-text analyst identifier, nullable)
  *   priority          VARCHAR    NOT NULL DEFAULT 'LOW'  (derived from risk_score at creation)
+ *   sla_due_at        TIMESTAMP  NOT NULL  (deadline derived from priority at creation)
  *   created_at        TIMESTAMP  NOT NULL
  *   updated_at        TIMESTAMP  NOT NULL
  * </pre>
@@ -101,6 +102,13 @@ public class FraudCase {
     @Column(nullable = false, length = 20)
     @Builder.Default
     private CasePriority priority = CasePriority.LOW;
+
+    /**
+     * Deadline by which the case should be resolved, derived once from
+     * {@link #priority} at creation time via {@link FraudCaseService#computeSlaDueAt}.
+     */
+    @Column(name = "sla_due_at", nullable = false)
+    private Instant slaDueAt;
 
     /** UTC instant when the case was auto-created by {@link io.github.mahfaas.fraudshield.audit.AuditService}. */
     @Column(name = "created_at", nullable = false, updatable = false)

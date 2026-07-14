@@ -33,6 +33,9 @@ class FraudshieldApplicationTests {
     private io.github.mahfaas.fraudshield.blacklist.BlacklistRepository blacklistRepository;
 
     @MockitoBean
+    private io.github.mahfaas.fraudshield.cases.FraudCaseRepository fraudCaseRepository;
+
+    @MockitoBean
     private org.springframework.data.redis.core.StringRedisTemplate stringRedisTemplate;
 
     @MockitoBean

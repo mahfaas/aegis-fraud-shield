@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.Optional;
 
 /**
@@ -49,4 +50,22 @@ public interface FraudCaseRepository extends JpaRepository<FraudCase, Long> {
      */
     @Query("SELECT c.status, COUNT(c) FROM FraudCase c WHERE c.createdAt >= :since GROUP BY c.status")
     java.util.List<Object[]> countByStatusSince(@Param("since") Instant since);
+
+    /**
+     * Paginated query for cases that are still open work and past their
+     * {@link FraudCase#getSlaDueAt()} deadline, most overdue first.
+     *
+     * @param openStatuses the non-terminal statuses to include (OPEN, INVESTIGATING)
+     * @param now          the instant to compare deadlines against
+     */
+    @Query("SELECT c FROM FraudCase c WHERE c.status IN :openStatuses AND c.slaDueAt < :now ORDER BY c.slaDueAt ASC")
+    Page<FraudCase> findBreached(@Param("openStatuses") Collection<FraudCaseStatus> openStatuses,
+                                  @Param("now") Instant now, Pageable pageable);
+
+    /**
+     * Count of currently-breached cases. Backs the {@code fraud.cases.sla_breached}
+     * gauge in {@link io.github.mahfaas.fraudshield.metrics.FraudMetrics}.
+     */
+    @Query("SELECT COUNT(c) FROM FraudCase c WHERE c.status IN :openStatuses AND c.slaDueAt < :now")
+    long countBreached(@Param("openStatuses") Collection<FraudCaseStatus> openStatuses, @Param("now") Instant now);
 }

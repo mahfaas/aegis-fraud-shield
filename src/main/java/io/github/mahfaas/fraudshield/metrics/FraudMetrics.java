@@ -1,5 +1,7 @@
 package io.github.mahfaas.fraudshield.metrics;
 
+import io.github.mahfaas.fraudshield.cases.FraudCaseRepository;
+import io.github.mahfaas.fraudshield.cases.FraudCaseStatus;
 import io.github.mahfaas.fraudshield.engine.RuleEngine;
 import io.github.mahfaas.fraudshield.model.Verdict;
 import io.micrometer.core.instrument.Counter;
@@ -9,6 +11,8 @@ import io.micrometer.core.instrument.Timer;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
+import java.time.Instant;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -26,10 +30,14 @@ import java.util.concurrent.ConcurrentHashMap;
  *   <li>{@code fraud.rules.triggered{rule}} — per-rule and aggregate trigger counts</li>
  *   <li>{@code fraud.processing.time} — processing latency histogram (P50/P95/P99)</li>
  *   <li>{@code fraud.engine.active_rules} — gauge: number of loaded rules</li>
+ *   <li>{@code fraud.cases.sla_breached} — gauge: open/investigating cases past their SLA deadline</li>
  * </ul>
  */
 @Component
 public class FraudMetrics {
+
+    private static final Set<FraudCaseStatus> OPEN_STATUSES =
+            Set.of(FraudCaseStatus.OPEN, FraudCaseStatus.INVESTIGATING);
 
     private final Counter transactionsReceived;
     private final Counter transactionsApproved;
@@ -49,7 +57,7 @@ public class FraudMetrics {
      * @param ruleEngine injected lazily to break the circular dependency:
      *                   RuleEngine → FraudMetrics → RuleEngine.
      */
-    public FraudMetrics(MeterRegistry registry, @Lazy RuleEngine ruleEngine) {
+    public FraudMetrics(MeterRegistry registry, @Lazy RuleEngine ruleEngine, FraudCaseRepository fraudCaseRepository) {
         this.registry = registry;
 
         this.transactionsReceived = Counter.builder("fraud.transactions.received")
@@ -95,6 +103,12 @@ public class FraudMetrics {
         // Gauge: reports the live count of registered rules via RuleEngine::getRuleCount
         Gauge.builder("fraud.engine.active_rules", ruleEngine, RuleEngine::getRuleCount)
                 .description("Number of fraud-detection rules currently loaded in the engine")
+                .register(registry);
+
+        // Gauge: reports the live count of SLA-breached cases, queried fresh on every scrape
+        Gauge.builder("fraud.cases.sla_breached", fraudCaseRepository,
+                        repo -> repo.countBreached(OPEN_STATUSES, Instant.now()))
+                .description("Open or investigating fraud cases past their SLA deadline")
                 .register(registry);
     }
 

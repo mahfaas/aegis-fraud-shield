@@ -176,6 +176,26 @@ class FraudCaseControllerTest {
         }
     }
 
+    // ── GET /api/v1/cases/breached ────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("GET /api/v1/cases/breached")
+    class GetBreached {
+
+        @Test
+        @DisplayName("Returns 200 with SLA-breached cases")
+        void returnsBreachedCases() throws Exception {
+            PagedResponse<FraudCase> response =
+                    PagedResponse.of(List.of(openCase()), 0, 20, 1L);
+            when(fraudCaseService.getBreached(0, 20)).thenReturn(response);
+
+            mockMvc.perform(get("/api/v1/cases/breached"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content[0].transactionId").value("tx-case-001"))
+                    .andExpect(jsonPath("$.totalElements").value(1));
+        }
+    }
+
     // ── GET /api/v1/cases/stats ───────────────────────────────────────────────
 
     @Nested

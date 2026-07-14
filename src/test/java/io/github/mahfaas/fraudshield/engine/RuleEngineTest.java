@@ -1,5 +1,6 @@
 package io.github.mahfaas.fraudshield.engine;
 
+import io.github.mahfaas.fraudshield.cases.FraudCaseRepository;
 import io.github.mahfaas.fraudshield.metrics.FraudMetrics;
 import io.github.mahfaas.fraudshield.model.Transaction;
 import io.github.mahfaas.fraudshield.model.Verdict;
@@ -49,7 +50,8 @@ class RuleEngineTest {
      * still {@code verify} call counts and arguments.
      */
     @Spy
-    private FraudMetrics metrics = new FraudMetrics(new SimpleMeterRegistry(), mockRuleEngine());
+    private FraudMetrics metrics =
+            new FraudMetrics(new SimpleMeterRegistry(), mockRuleEngine(), mockFraudCaseRepository());
 
     private Transaction baseTransaction() {
         return Transaction.builder()
@@ -69,6 +71,11 @@ class RuleEngineTest {
         RuleEngine stub = mock(RuleEngine.class);
         when(stub.getRuleCount()).thenReturn(0);
         return stub;
+    }
+
+    /** Minimal stub used only to satisfy FraudMetrics constructor (SLA-breach Gauge binding). */
+    private static FraudCaseRepository mockFraudCaseRepository() {
+        return mock(FraudCaseRepository.class);
     }
 
     private static Rule approveRule(String name, int order) {

@@ -49,7 +49,7 @@ class FraudCaseServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new FraudCaseService(repository, noteRepository);
+        service = new FraudCaseService(repository, noteRepository, 4, 24, 72);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -84,6 +84,7 @@ class FraudCaseServiceTest {
                 .riskScore(60)
                 .triggeredRules("GEO_VELOCITY|TIME_WINDOW")
                 .status(status)
+                .slaDueAt(Instant.parse("2026-06-11T10:00:00Z"))
                 .createdAt(Instant.parse("2026-06-10T10:00:00Z"))
                 .updatedAt(Instant.parse("2026-06-10T10:00:00Z"))
                 .build();
@@ -115,7 +116,28 @@ class FraudCaseServiceTest {
             assertEquals(FraudCaseStatus.OPEN, captured.getStatus());
             assertEquals("GEO_VELOCITY|TIME_WINDOW", captured.getTriggeredRules());
             assertEquals(CasePriority.HIGH, captured.getPriority());
+            assertNotNull(captured.getSlaDueAt());
             assertSame(captured, result);
+        }
+
+        @Test
+        @DisplayName("sets slaDueAt based on the derived priority's SLA window")
+        void setsSlaDueAtFromPriority() {
+            VerdictedTransaction vtx = buildVerdictedTx("tx-003", List.of("[VELOCITY] too fast"), 60);
+            when(repository.existsByTransactionId("tx-003")).thenReturn(false);
+
+            ArgumentCaptor<FraudCase> captor = ArgumentCaptor.forClass(FraudCase.class);
+            when(repository.save(captor.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+            Instant before = Instant.now();
+            service.createFromVerdict(vtx);
+            Instant after = Instant.now();
+
+            FraudCase captured = captor.getValue();
+            assertEquals(CasePriority.MEDIUM, captured.getPriority());
+            // MEDIUM priority SLA window is 24 hours (configured in setUp())
+            assertFalse(captured.getSlaDueAt().isBefore(before.plus(24, java.time.temporal.ChronoUnit.HOURS)));
+            assertFalse(captured.getSlaDueAt().isAfter(after.plus(24, java.time.temporal.ChronoUnit.HOURS)));
         }
 
         @Test
@@ -370,6 +392,34 @@ class FraudCaseServiceTest {
 
             assertEquals(1, result.content().size());
             assertEquals(CasePriority.HIGH, result.content().getFirst().getPriority());
+        }
+    }
+
+    // ── getBreached() / getBreachedCount() — SLA ─────────────────────────────
+
+    @Nested
+    @DisplayName("getBreached() / getBreachedCount()")
+    class Sla {
+
+        @Test
+        @DisplayName("getBreached() delegates to the SLA-breach repository query")
+        void getBreachedReturnsFilteredResponse() {
+            FraudCase c = buildCase(1L, FraudCaseStatus.OPEN);
+            when(repository.findBreached(any(), any(Instant.class), any(Pageable.class)))
+                    .thenReturn(new PageImpl<>(List.of(c)));
+
+            PagedResponse<FraudCase> result = service.getBreached(0, 20);
+
+            assertEquals(1, result.content().size());
+            assertEquals(1L, result.totalElements());
+        }
+
+        @Test
+        @DisplayName("getBreachedCount() delegates to the repository count query")
+        void getBreachedCountReturnsCount() {
+            when(repository.countBreached(any(), any(Instant.class))).thenReturn(3L);
+
+            assertEquals(3L, service.getBreachedCount());
         }
     }
 

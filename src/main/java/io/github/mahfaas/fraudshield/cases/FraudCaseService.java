@@ -2,8 +2,8 @@ package io.github.mahfaas.fraudshield.cases;
 
 import io.github.mahfaas.fraudshield.api.PagedResponse;
 import io.github.mahfaas.fraudshield.model.VerdictedTransaction;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -12,11 +12,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -45,11 +47,30 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class FraudCaseService {
+
+    /** Non-terminal statuses considered "open work" for SLA breach purposes. */
+    private static final Set<FraudCaseStatus> OPEN_STATUSES =
+            Set.of(FraudCaseStatus.OPEN, FraudCaseStatus.INVESTIGATING);
 
     private final FraudCaseRepository repository;
     private final FraudCaseNoteRepository noteRepository;
+    private final Duration highPrioritySla;
+    private final Duration mediumPrioritySla;
+    private final Duration lowPrioritySla;
+
+    public FraudCaseService(
+            FraudCaseRepository repository,
+            FraudCaseNoteRepository noteRepository,
+            @Value("${fraud.cases.sla.high-hours:4}") long highPriorityHours,
+            @Value("${fraud.cases.sla.medium-hours:24}") long mediumPriorityHours,
+            @Value("${fraud.cases.sla.low-hours:72}") long lowPriorityHours) {
+        this.repository = repository;
+        this.noteRepository = noteRepository;
+        this.highPrioritySla = Duration.ofHours(highPriorityHours);
+        this.mediumPrioritySla = Duration.ofHours(mediumPriorityHours);
+        this.lowPrioritySla = Duration.ofHours(lowPriorityHours);
+    }
 
     // ── Case creation ─────────────────────────────────────────────────────────
 
@@ -78,6 +99,8 @@ public class FraudCaseService {
                 .collect(Collectors.joining("|"));
 
         int riskScore = verdictedTransaction.getTotalRiskScore();
+        CasePriority priority = computePriority(riskScore);
+        Instant now = Instant.now();
 
         FraudCase fraudCase = FraudCase.builder()
                 .transactionId(txId)
@@ -86,12 +109,13 @@ public class FraudCaseService {
                 .riskScore(riskScore)
                 .triggeredRules(triggeredRules)
                 .status(FraudCaseStatus.OPEN)
-                .priority(computePriority(riskScore))
+                .priority(priority)
+                .slaDueAt(now.plus(slaFor(priority)))
                 .build();
 
         FraudCase saved = repository.save(fraudCase);
-        log.info("FraudCase created: id={}, txId={}, riskScore={}, priority={}",
-                saved.getId(), txId, saved.getRiskScore(), saved.getPriority());
+        log.info("FraudCase created: id={}, txId={}, riskScore={}, priority={}, slaDueAt={}",
+                saved.getId(), txId, saved.getRiskScore(), saved.getPriority(), saved.getSlaDueAt());
         return saved;
     }
 
@@ -109,6 +133,18 @@ public class FraudCaseService {
             return CasePriority.MEDIUM;
         }
         return CasePriority.LOW;
+    }
+
+    /**
+     * Returns the SLA window for a given {@link CasePriority}, configurable via
+     * {@code fraud.cases.sla.{high,medium,low}-hours} (defaults: 4h / 24h / 72h).
+     */
+    private Duration slaFor(CasePriority priority) {
+        return switch (priority) {
+            case HIGH -> highPrioritySla;
+            case MEDIUM -> mediumPrioritySla;
+            case LOW -> lowPrioritySla;
+        };
     }
 
     // ── Read operations ───────────────────────────────────────────────────────
@@ -230,6 +266,29 @@ public class FraudCaseService {
         PageRequest pageable = PageRequest.of(page, size);
         Page<FraudCase> result = repository.findByPriorityOrderByCreatedAtDesc(priority, pageable);
         return PagedResponse.of(result.getContent(), page, size, result.getTotalElements());
+    }
+
+    // ── SLA ───────────────────────────────────────────────────────────────────
+
+    /**
+     * Returns a paginated list of open/investigating cases past their
+     * {@code slaDueAt} deadline, most overdue first — the analyst queue for
+     * cases that need attention right now.
+     */
+    @Transactional(readOnly = true)
+    public PagedResponse<FraudCase> getBreached(int page, int size) {
+        PageRequest pageable = PageRequest.of(page, size);
+        Page<FraudCase> result = repository.findBreached(OPEN_STATUSES, Instant.now(), pageable);
+        return PagedResponse.of(result.getContent(), page, size, result.getTotalElements());
+    }
+
+    /**
+     * Count of currently-breached cases, used by the
+     * {@code fraud.cases.sla_breached} gauge in {@code FraudMetrics}.
+     */
+    @Transactional(readOnly = true)
+    public long getBreachedCount() {
+        return repository.countBreached(OPEN_STATUSES, Instant.now());
     }
 
     // ── Reopen (explicit escape hatch) ───────────────────────────────────────
