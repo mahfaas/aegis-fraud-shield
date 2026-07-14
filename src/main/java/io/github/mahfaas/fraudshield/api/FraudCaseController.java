@@ -31,6 +31,8 @@ import java.util.Map;
  *   PUT  /api/v1/cases/{id}/assign            — assign/unassign a case to an analyst
  *   GET  /api/v1/cases/by-assignee/{assignee} — filter by assigned analyst
  *   POST /api/v1/cases/{id}/reopen            — reopen a closed case (requires a reason)
+ *   POST /api/v1/cases/bulk-assign            — assign/unassign many cases at once
+ *   POST /api/v1/cases/bulk-status            — advance many cases' lifecycle at once
  * </pre>
  *
  * <h3>Case lifecycle</h3>
@@ -224,6 +226,41 @@ public class FraudCaseController {
         return fraudCaseService.reopen(id, request.reopenedBy(), request.reason());
     }
 
+    // ── Bulk operations ───────────────────────────────────────────────────────
+
+    @PostMapping("/bulk-assign")
+    @Operation(
+            summary = "Assign or unassign many cases at once",
+            description = """
+                    Best-effort bulk assignment: each case ID is processed independently, so
+                    one bad ID (not found, or already closed) doesn't block the rest. Outcomes
+                    are reported per-ID in the response. Accepts 1-100 case IDs; returns 400
+                    Bad Request if the list is empty or exceeds that limit.
+                    """
+    )
+    public FraudCaseService.BulkOperationResult bulkAssign(
+            @RequestBody BulkAssignRequest request) {
+
+        return fraudCaseService.bulkAssign(request.caseIds(), request.assignee());
+    }
+
+    @PostMapping("/bulk-status")
+    @Operation(
+            summary = "Advance many cases' lifecycle status at once",
+            description = """
+                    Best-effort bulk status transition, applying the same state-machine rules
+                    as the single-case endpoint to each ID independently — one invalid
+                    transition doesn't block the rest. Outcomes are reported per-ID in the
+                    response. Accepts 1-100 case IDs; returns 400 Bad Request if the list is
+                    empty or exceeds that limit.
+                    """
+    )
+    public FraudCaseService.BulkOperationResult bulkUpdateStatus(
+            @RequestBody BulkStatusUpdateRequest request) {
+
+        return fraudCaseService.bulkUpdateStatus(request.caseIds(), request.status(), request.analystNote());
+    }
+
     // ── Notes / history log ──────────────────────────────────────────────────
 
     @PostMapping("/{id}/notes")
@@ -285,4 +322,21 @@ public class FraudCaseController {
      * @param reason     mandatory justification for the reopen
      */
     public record ReopenRequest(String reopenedBy, String reason) {}
+
+    /**
+     * Request body for the bulk-assign endpoint.
+     *
+     * @param caseIds  the case database IDs to assign (1-100)
+     * @param assignee free-text analyst identifier, or null/blank to unassign
+     */
+    public record BulkAssignRequest(List<Long> caseIds, String assignee) {}
+
+    /**
+     * Request body for the bulk-status endpoint.
+     *
+     * @param caseIds     the case database IDs to transition (1-100)
+     * @param status      the desired target status
+     * @param analystNote optional free-text note applied to every successfully-updated case
+     */
+    public record BulkStatusUpdateRequest(List<Long> caseIds, FraudCaseStatus status, String analystNote) {}
 }

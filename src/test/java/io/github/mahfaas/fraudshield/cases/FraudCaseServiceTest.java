@@ -423,6 +423,114 @@ class FraudCaseServiceTest {
         }
     }
 
+    // ── bulkAssign() / bulkUpdateStatus() ────────────────────────────────────
+
+    @Nested
+    @DisplayName("bulkAssign() / bulkUpdateStatus()")
+    class BulkOperations {
+
+        @Test
+        @DisplayName("bulkAssign() assigns every case and reports all as succeeded")
+        void bulkAssignAllSucceed() {
+            FraudCase c1 = buildCase(1L, FraudCaseStatus.OPEN);
+            FraudCase c2 = buildCase(2L, FraudCaseStatus.INVESTIGATING);
+            when(repository.findById(1L)).thenReturn(Optional.of(c1));
+            when(repository.findById(2L)).thenReturn(Optional.of(c2));
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            FraudCaseService.BulkOperationResult result = service.bulkAssign(List.of(1L, 2L), "analyst-1");
+
+            assertEquals(List.of(1L, 2L), result.succeeded());
+            assertTrue(result.failed().isEmpty());
+            assertEquals("analyst-1", c1.getAssignedTo());
+            assertEquals("analyst-1", c2.getAssignedTo());
+        }
+
+        @Test
+        @DisplayName("bulkAssign() reports a closed case as failed but still assigns the rest")
+        void bulkAssignPartialFailure() {
+            FraudCase open = buildCase(1L, FraudCaseStatus.OPEN);
+            FraudCase closed = buildCase(2L, FraudCaseStatus.CLOSED_FRAUD);
+            when(repository.findById(1L)).thenReturn(Optional.of(open));
+            when(repository.findById(2L)).thenReturn(Optional.of(closed));
+            when(repository.findById(99L)).thenReturn(Optional.empty());
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            FraudCaseService.BulkOperationResult result = service.bulkAssign(List.of(1L, 2L, 99L), "analyst-1");
+
+            assertEquals(List.of(1L), result.succeeded());
+            assertEquals(2, result.failed().size());
+            assertTrue(result.failed().containsKey(2L));
+            assertTrue(result.failed().containsKey(99L));
+        }
+
+        @Test
+        @DisplayName("bulkAssign() rejects an empty ID list with 400")
+        void bulkAssignRejectsEmptyList() {
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                    () -> service.bulkAssign(List.of(), "analyst-1"));
+
+            assertEquals(400, ex.getStatusCode().value());
+            verify(repository, never()).save(any());
+        }
+
+        @Test
+        @DisplayName("bulkAssign() rejects a batch larger than the configured limit with 400")
+        void bulkAssignRejectsOversizedBatch() {
+            List<Long> tooMany = java.util.stream.LongStream.rangeClosed(1, 101).boxed().toList();
+
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                    () -> service.bulkAssign(tooMany, "analyst-1"));
+
+            assertEquals(400, ex.getStatusCode().value());
+            verify(repository, never()).findById(any());
+        }
+
+        @Test
+        @DisplayName("bulkUpdateStatus() transitions every case and reports all as succeeded")
+        void bulkUpdateStatusAllSucceed() {
+            FraudCase c1 = buildCase(1L, FraudCaseStatus.OPEN);
+            FraudCase c2 = buildCase(2L, FraudCaseStatus.OPEN);
+            when(repository.findById(1L)).thenReturn(Optional.of(c1));
+            when(repository.findById(2L)).thenReturn(Optional.of(c2));
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            FraudCaseService.BulkOperationResult result =
+                    service.bulkUpdateStatus(List.of(1L, 2L), FraudCaseStatus.INVESTIGATING, "Batch triage");
+
+            assertEquals(List.of(1L, 2L), result.succeeded());
+            assertTrue(result.failed().isEmpty());
+            assertEquals(FraudCaseStatus.INVESTIGATING, c1.getStatus());
+            assertEquals(FraudCaseStatus.INVESTIGATING, c2.getStatus());
+        }
+
+        @Test
+        @DisplayName("bulkUpdateStatus() reports an invalid transition as failed but still updates the rest")
+        void bulkUpdateStatusPartialFailure() {
+            FraudCase open = buildCase(1L, FraudCaseStatus.OPEN);
+            FraudCase alreadyClosed = buildCase(2L, FraudCaseStatus.CLOSED_FRAUD);
+            when(repository.findById(1L)).thenReturn(Optional.of(open));
+            when(repository.findById(2L)).thenReturn(Optional.of(alreadyClosed));
+            when(repository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+            FraudCaseService.BulkOperationResult result =
+                    service.bulkUpdateStatus(List.of(1L, 2L), FraudCaseStatus.INVESTIGATING, null);
+
+            assertEquals(List.of(1L), result.succeeded());
+            assertEquals(1, result.failed().size());
+            assertTrue(result.failed().containsKey(2L));
+        }
+
+        @Test
+        @DisplayName("bulkUpdateStatus() rejects an empty ID list with 400")
+        void bulkUpdateStatusRejectsEmptyList() {
+            ResponseStatusException ex = assertThrows(ResponseStatusException.class,
+                    () -> service.bulkUpdateStatus(null, FraudCaseStatus.INVESTIGATING, null));
+
+            assertEquals(400, ex.getStatusCode().value());
+        }
+    }
+
     // ── reopen() — explicit escape hatch ─────────────────────────────────────
 
     @Nested

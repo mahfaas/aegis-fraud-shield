@@ -15,7 +15,9 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -203,8 +205,17 @@ public class FraudCaseService {
     public FraudCase updateStatus(Long id, FraudCaseStatus newStatus, String analystNote) {
         FraudCase fraudCase = repository.findById(id)
                 .orElseThrow(() -> new FraudCaseNotFoundException(id));
+        return applyStatusUpdate(fraudCase, newStatus, analystNote);
+    }
 
-        validateTransition(fraudCase.getStatus(), newStatus);
+    /**
+     * Core status-transition logic shared by {@link #updateStatus} and
+     * {@link #bulkUpdateStatus}. Assumes {@code fraudCase} was already loaded —
+     * callers are responsible for the not-found lookup.
+     */
+    private FraudCase applyStatusUpdate(FraudCase fraudCase, FraudCaseStatus newStatus, String analystNote) {
+        FraudCaseStatus previousStatus = fraudCase.getStatus();
+        validateTransition(previousStatus, newStatus);
 
         fraudCase.setStatus(newStatus);
         if (analystNote != null && !analystNote.isBlank()) {
@@ -212,7 +223,7 @@ public class FraudCaseService {
         }
 
         FraudCase updated = repository.save(fraudCase);
-        log.info("FraudCase {} transitioned: {} → {}", id, fraudCase.getStatus(), newStatus);
+        log.info("FraudCase {} transitioned: {} → {}", updated.getId(), previousStatus, newStatus);
         return updated;
     }
 
@@ -234,7 +245,15 @@ public class FraudCaseService {
     public FraudCase assign(Long id, String assignee) {
         FraudCase fraudCase = repository.findById(id)
                 .orElseThrow(() -> new FraudCaseNotFoundException(id));
+        return applyAssign(fraudCase, assignee);
+    }
 
+    /**
+     * Core assignment logic shared by {@link #assign} and {@link #bulkAssign}.
+     * Assumes {@code fraudCase} was already loaded — callers are responsible
+     * for the not-found lookup.
+     */
+    private FraudCase applyAssign(FraudCase fraudCase, String assignee) {
         if (fraudCase.getStatus().isClosed()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Cannot assign a case in terminal status " + fraudCase.getStatus());
@@ -244,7 +263,7 @@ public class FraudCaseService {
         fraudCase.setAssignedTo(normalized);
 
         FraudCase updated = repository.save(fraudCase);
-        log.info("FraudCase {} assigned to {}", id, normalized);
+        log.info("FraudCase {} assigned to {}", updated.getId(), normalized);
         return updated;
     }
 
@@ -267,6 +286,97 @@ public class FraudCaseService {
         Page<FraudCase> result = repository.findByPriorityOrderByCreatedAtDesc(priority, pageable);
         return PagedResponse.of(result.getContent(), page, size, result.getTotalElements());
     }
+
+    // ── Bulk operations ──────────────────────────────────────────────────────
+
+    /** Upper bound on how many case IDs a single bulk request may touch. */
+    private static final int MAX_BULK_SIZE = 100;
+
+    /**
+     * Assigns (or unassigns) many cases to an analyst in one call.
+     *
+     * <p>Best-effort: each case ID is processed independently, so one bad ID
+     * (not found, or already closed) doesn't block the rest of the batch —
+     * outcomes are reported per-ID in the returned {@link BulkOperationResult}.
+     *
+     * @param caseIds  the case database IDs to assign (1-{@value #MAX_BULK_SIZE})
+     * @param assignee free-text analyst identifier, or null/blank to unassign
+     * @throws ResponseStatusException if the ID list is empty or exceeds {@value #MAX_BULK_SIZE} (400)
+     */
+    @Transactional
+    public BulkOperationResult bulkAssign(List<Long> caseIds, String assignee) {
+        validateBulkSize(caseIds);
+
+        List<Long> succeeded = new ArrayList<>();
+        Map<Long, String> failed = new LinkedHashMap<>();
+
+        for (Long id : caseIds) {
+            try {
+                FraudCase fraudCase = repository.findById(id)
+                        .orElseThrow(() -> new FraudCaseNotFoundException(id));
+                applyAssign(fraudCase, assignee);
+                succeeded.add(id);
+            } catch (FraudCaseNotFoundException | ResponseStatusException e) {
+                failed.put(id, e.getMessage());
+            }
+        }
+
+        log.info("Bulk assign to {}: {} succeeded, {} failed", assignee, succeeded.size(), failed.size());
+        return new BulkOperationResult(succeeded, failed);
+    }
+
+    /**
+     * Transitions many cases to a new status in one call, applying the same
+     * state-machine validation as {@link #updateStatus} to each.
+     *
+     * <p>Best-effort: each case ID is processed independently, so one invalid
+     * transition doesn't block the rest of the batch — outcomes are reported
+     * per-ID in the returned {@link BulkOperationResult}.
+     *
+     * @param caseIds     the case database IDs to transition (1-{@value #MAX_BULK_SIZE})
+     * @param newStatus   the desired target status
+     * @param analystNote optional free-text note applied to every successfully-updated case
+     * @throws ResponseStatusException if the ID list is empty or exceeds {@value #MAX_BULK_SIZE} (400)
+     */
+    @Transactional
+    public BulkOperationResult bulkUpdateStatus(List<Long> caseIds, FraudCaseStatus newStatus, String analystNote) {
+        validateBulkSize(caseIds);
+
+        List<Long> succeeded = new ArrayList<>();
+        Map<Long, String> failed = new LinkedHashMap<>();
+
+        for (Long id : caseIds) {
+            try {
+                FraudCase fraudCase = repository.findById(id)
+                        .orElseThrow(() -> new FraudCaseNotFoundException(id));
+                applyStatusUpdate(fraudCase, newStatus, analystNote);
+                succeeded.add(id);
+            } catch (FraudCaseNotFoundException | ResponseStatusException e) {
+                failed.put(id, e.getMessage());
+            }
+        }
+
+        log.info("Bulk status update to {}: {} succeeded, {} failed", newStatus, succeeded.size(), failed.size());
+        return new BulkOperationResult(succeeded, failed);
+    }
+
+    private void validateBulkSize(List<Long> caseIds) {
+        if (caseIds == null || caseIds.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "No case IDs provided");
+        }
+        if (caseIds.size() > MAX_BULK_SIZE) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Too many case IDs: " + caseIds.size() + " exceeds the limit of " + MAX_BULK_SIZE);
+        }
+    }
+
+    /**
+     * Per-ID outcome of a bulk operation.
+     *
+     * @param succeeded case IDs that were updated successfully
+     * @param failed    case IDs that could not be updated, mapped to the failure reason
+     */
+    public record BulkOperationResult(List<Long> succeeded, Map<Long, String> failed) {}
 
     // ── SLA ───────────────────────────────────────────────────────────────────
 

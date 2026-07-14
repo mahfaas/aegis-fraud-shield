@@ -466,6 +466,92 @@ class FraudCaseControllerTest {
         }
     }
 
+    // ── POST /api/v1/cases/bulk-assign ────────────────────────────────────────
+
+    @Nested
+    @DisplayName("POST /api/v1/cases/bulk-assign")
+    class BulkAssign {
+
+        @Test
+        @DisplayName("Returns 200 with per-ID succeeded/failed outcomes")
+        void returnsBulkResult() throws Exception {
+            FraudCaseService.BulkOperationResult result =
+                    new FraudCaseService.BulkOperationResult(List.of(1L, 2L), Map.of(3L, "Case not found: id=3"));
+            when(fraudCaseService.bulkAssign(List.of(1L, 2L, 3L), "analyst-1")).thenReturn(result);
+
+            String body = """
+                    {"caseIds":[1,2,3],"assignee":"analyst-1"}
+                    """;
+
+            mockMvc.perform(post("/api/v1/cases/bulk-assign")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.succeeded[0]").value(1))
+                    .andExpect(jsonPath("$.succeeded[1]").value(2))
+                    .andExpect(jsonPath("$.failed.3").value("Case not found: id=3"));
+        }
+
+        @Test
+        @DisplayName("Returns 400 when the ID list is empty")
+        void returns400ForEmptyList() throws Exception {
+            when(fraudCaseService.bulkAssign(List.of(), "analyst-1"))
+                    .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST, "No case IDs provided"));
+
+            String body = """
+                    {"caseIds":[],"assignee":"analyst-1"}
+                    """;
+
+            mockMvc.perform(post("/api/v1/cases/bulk-assign")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
+    // ── POST /api/v1/cases/bulk-status ────────────────────────────────────────
+
+    @Nested
+    @DisplayName("POST /api/v1/cases/bulk-status")
+    class BulkStatus {
+
+        @Test
+        @DisplayName("Returns 200 with per-ID succeeded/failed outcomes")
+        void returnsBulkResult() throws Exception {
+            FraudCaseService.BulkOperationResult result =
+                    new FraudCaseService.BulkOperationResult(List.of(1L),
+                            Map.of(2L, "Cannot transition from terminal status CLOSED_FRAUD"));
+            when(fraudCaseService.bulkUpdateStatus(List.of(1L, 2L), FraudCaseStatus.INVESTIGATING, "Batch triage"))
+                    .thenReturn(result);
+
+            String body = """
+                    {"caseIds":[1,2],"status":"INVESTIGATING","analystNote":"Batch triage"}
+                    """;
+
+            mockMvc.perform(post("/api/v1/cases/bulk-status")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.succeeded[0]").value(1))
+                    .andExpect(jsonPath("$.failed.2").value("Cannot transition from terminal status CLOSED_FRAUD"));
+        }
+
+        @Test
+        @DisplayName("Returns 400 when the batch exceeds the size limit")
+        void returns400ForOversizedBatch() throws Exception {
+            when(fraudCaseService.bulkUpdateStatus(any(), any(), any()))
+                    .thenThrow(new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                            "Too many case IDs: 101 exceeds the limit of 100"));
+
+            String body = "{\"caseIds\":[1,2],\"status\":\"INVESTIGATING\",\"analystNote\":null}";
+
+            mockMvc.perform(post("/api/v1/cases/bulk-status")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(body))
+                    .andExpect(status().isBadRequest());
+        }
+    }
+
     // ── POST /api/v1/cases/{id}/notes ─────────────────────────────────────────
 
     @Nested
